@@ -16,21 +16,21 @@
     </scaling>
   </defaults>
   <part-list>
-    <score-part id="Pae788dd0112c99eed231843c2b573f6b">
+    <score-part id="Pa8363aacc403ab41efe21fbc06bf9ba9">
       <part-name>Piano</part-name>
       <part-abbreviation>Pno</part-abbreviation>
-      <score-instrument id="I84bdd06d4131355e4299540994091324">
+      <score-instrument id="If8e3c29bbdc0d392d7d9f6dab37325cf">
         <instrument-name>Piano</instrument-name>
         <instrument-abbreviation>Pno</instrument-abbreviation>
       </score-instrument>
-      <midi-instrument id="I84bdd06d4131355e4299540994091324">
+      <midi-instrument id="If8e3c29bbdc0d392d7d9f6dab37325cf">
         <midi-channel>1</midi-channel>
         <midi-program>1</midi-program>
       </midi-instrument>
     </score-part>
   </part-list>
   <!--=========================== Part 1 ===========================-->
-  <part id="Pae788dd0112c99eed231843c2b573f6b">
+  <part id="Pa8363aacc403ab41efe21fbc06bf9ba9">
     <!--========================= Measure 0 ==========================-->
     <measure number="0">
       <attributes>
@@ -109,13 +109,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>5</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -177,13 +175,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>6</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -197,13 +193,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>6</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -265,13 +259,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>5</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -351,13 +343,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>4</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -419,13 +409,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>5</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -535,13 +523,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>5</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
@@ -603,13 +589,11 @@
       </note>
       <note>
         <pitch>
-          <step>E</step>
-          <alter>1</alter>
+          <step>F</step>
           <octave>4</octave>
         </pitch>
         <duration>10080</duration>
         <type>quarter</type>
-        <accidental>sharp</accidental>
       </note>
       <note>
         <pitch>
