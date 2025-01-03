@@ -13,6 +13,7 @@ def determine_clef_and_octave(instrument_name):
         "Guitar": ("TrebleClef", 3)
     }
     return instruments.get(instrument_name, ("TrebleClef", 4))  # Default to TrebleClef and middle C octave if not found
+
 def create_scale(key_signature, num_octaves, instrument_name, scale_type="major"):
     # Determine the clef and starting octave based on the instrument
     selected_clef, octave_start = determine_clef_and_octave(instrument_name)
@@ -22,13 +23,17 @@ def create_scale(key_signature, num_octaves, instrument_name, scale_type="major"
     s.append(instrument.__dict__[instrument_name]())  # Set the instrument
     s.append(clef.__dict__[selected_clef]())  # Set the clef
     
-    # Generate the scale based on key signature and scale type
+    # Create the key signature and add to the stream
     if scale_type == "major":
+        ks = key.Key(key_signature)
         sc = scale.MajorScale(key_signature)
     else:
-        major_key = key.Key(key_signature)
-        relative_minor_key = major_key.getRelativeMinor()  # Correct method to get the relative minor key
+        ks = key.Key(key_signature)
+        relative_minor_key = ks.getRelativeMinor()  # Correct method to get the relative minor key
         sc = scale.MinorScale(relative_minor_key.tonic.name)
+        ks = key.Key(relative_minor_key.tonic.name, 'minor')
+
+    s.append(ks)  # Add key signature to the stream
 
     # Get pitches for the scale going up and back down
     notes_up = sc.getPitches(f"{sc.tonic.name}{octave_start}", f"{sc.tonic.name}{octave_start + num_octaves}")
