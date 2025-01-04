@@ -335,11 +335,12 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             # Insert Key Signature
             first_measure.insert(0, major_key_obj)
 
-        # Insert Clef and Key Signature into the first measure of arpeggio
-        if major_arpeggio_measures:
-            first_arpeggio_measure = major_arpeggio_measures[0]
-            first_arpeggio_measure.insert(0, getattr(clef, selected_clef)())
-            first_arpeggio_measure.insert(0, major_key_obj)
+        # **Remove Clef and Key Signature Insertion into the first measure of arpeggio**
+        # Commented out to prevent adding clef and key signature before arpeggio
+        # if major_arpeggio_measures:
+        #     first_arpeggio_measure = major_arpeggio_measures[0]
+        #     first_arpeggio_measure.insert(0, getattr(clef, selected_clef)())
+        #     first_arpeggio_measure.insert(0, major_key_obj)
 
         # Append all scale measures to the part
         for m in major_measures:
@@ -395,11 +396,12 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             # Insert Key Signature
             first_measure_right.insert(0, major_key_obj_right)
 
-        # Insert Clef and Key Signature into the first measure for right hand arpeggio
-        if major_arpeggio_measures_right:
-            first_arpeggio_measure_right = major_arpeggio_measures_right[0]
-            first_arpeggio_measure_right.insert(0, clef.TrebleClef())
-            first_arpeggio_measure_right.insert(0, major_key_obj_right)
+        # **Remove Clef and Key Signature Insertion into the first measure of right hand arpeggio**
+        # Commented out to prevent adding clef and key signature before arpeggio
+        # if major_arpeggio_measures_right:
+        #     first_arpeggio_measure_right = major_arpeggio_measures_right[0]
+        #     first_arpeggio_measure_right.insert(0, clef.TrebleClef())
+        #     first_arpeggio_measure_right.insert(0, major_key_obj_right)
 
         # Append all scale measures to the right hand part
         for m in major_measures_right:
@@ -450,11 +452,12 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             # Insert Key Signature
             first_measure_left.insert(0, major_key_obj_left)
 
-        # Insert Clef and Key Signature into the first measure for left hand arpeggio
-        if major_arpeggio_measures_left:
-            first_arpeggio_measure_left = major_arpeggio_measures_left[0]
-            first_arpeggio_measure_left.insert(0, clef.BassClef())
-            first_arpeggio_measure_left.insert(0, major_key_obj_left)
+        # **Remove Clef and Key Signature Insertion into the first measure of left hand arpeggio**
+        # Commented out to prevent adding clef and key signature before arpeggio
+        # if major_arpeggio_measures_left:
+        #     first_arpeggio_measure_left = major_arpeggio_measures_left[0]
+        #     first_arpeggio_measure_left.insert(0, clef.BassClef())
+        #     first_arpeggio_measure_left.insert(0, major_key_obj_left)
 
         # Append all scale measures to the left hand part
         for m in major_measures_left:
