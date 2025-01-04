@@ -59,7 +59,7 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
       - The scale (up then down) split into multiple measures with the following rhythmic pattern:
         - Each measure starts with a quarter note
         - Followed by six eighth notes
-      - The scale ends with a whole note
+      - The scale ends with a whole note in a separate measure
       - Automatic rewriting of E# -> F, B# -> C, etc.
     """
     # Create a Stream to hold all measures
@@ -85,8 +85,21 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
     note_counter = 0
 
     for i, p in enumerate(all_pitches):
-        # Handle the last note separately to assign it as a whole note
+        # Handle the last note separately to assign it as a whole note in a new measure
         if i == len(all_pitches) - 1:
+            # Append the current measure if it has any notes
+            if current_measure.notes:
+                measures_stream.append(current_measure)
+            
+            # Create a new measure for the whole note
+            whole_note_measure = stream.Measure()
+            
+            # Add the text expression to the whole note measure if it's the first measure
+            if i == 0:
+                txt = expressions.TextExpression(title_text)
+                txt.placement = 'above'
+                whole_note_measure.insert(0, txt)
+            
             # Create the whole note
             n = note.Note(p)
             n.duration = duration.Duration('whole')
@@ -95,8 +108,10 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
                 n.pitch.accidental.displayStatus = True
             # Fix E#, B#, etc.
             fix_enharmonic_spelling(n)
-            current_measure.append(n)
-            measures_stream.append(current_measure)
+            whole_note_measure.append(n)
+            
+            # Append the whole note measure to the stream
+            measures_stream.append(whole_note_measure)
             break
 
         # Determine the position within the measure
@@ -282,4 +297,4 @@ if __name__ == "__main__":
     # generate_and_save_scales_to_pdf("F#", 1, "Trombone")
 
     # For Piano with two staves
-    generate_and_save_scales_to_pdf("F#", 1, "Clarinet")
+    generate_and_save_scales_to_pdf("F#", 1, "Piano")
