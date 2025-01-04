@@ -13,12 +13,13 @@ ENHARM_MAP = {
     "Fb": ("E", 0),
 }
 
-def determine_clef_and_octave(instrument_name):
+def determine_clef_and_octave(instrument_name, part='right'):
     """
     Return a recommended clef and default octave start based on the instrument.
+    For Piano, differentiate between right and left hands.
     """
     instrument_map = {
-        "Piano": ("TrebleClef", 4),
+        "Piano": {"right": ("TrebleClef", 4), "left": ("BassClef", 2)},
         "Violin": ("TrebleClef", 3),
         "Cello": ("BassClef", 2),
         "Flute": ("TrebleClef", 4),
@@ -27,6 +28,8 @@ def determine_clef_and_octave(instrument_name):
         "Trombone": ("BassClef", 2),
         "Guitar": ("TrebleClef", 3),
     }
+    if instrument_name == "Piano":
+        return instrument_map[instrument_name][part]
     return instrument_map.get(instrument_name, ("TrebleClef", 4))
 
 def fix_enharmonic_spelling(n):
@@ -160,53 +163,113 @@ def generate_and_save_scales_to_pdf(key_signature, num_octaves, instrument_name)
     env['musescoreDirectPNGPath'] = '/Applications/MuseScore 4.app/Contents/MacOS/mscore'
 
     # 3) Determine clef & octave
+    # For Piano, we'll handle both hands separately later
     selected_clef, octave_start = determine_clef_and_octave(instrument_name)
 
-    # 4) Create a single-staff Part
-    part = stream.Part()
-    instr = instrument.fromString(instrument_name)
-    instr.staffCount = 1  # Force a single staff (no braces for Piano)
-    part.insert(0, instr)
-
-    # Create the major scale key signature
-    major_key_obj = key.Key(key_signature, 'major')
-
-    # Create major scale measures
-    major_scale_obj = scale.MajorScale(key_signature)
-    major_measures = create_scale_measures(
-        title_text=f"{key_signature} Major Scale",
-        scale_object=major_scale_obj,
-        octave_start=octave_start,
-        num_octaves=num_octaves
-    )
-
-    # Insert Clef and Key Signature into the first measure
-    if major_measures:
-        first_measure = major_measures[0]
-        # Insert Clef
-        first_measure.insert(0, getattr(clef, selected_clef)())
-        # Insert Key Signature
-        first_measure.insert(0, major_key_obj)
-    
-    # 5) Append all measures to the part individually
-    for m in major_measures:
-        part.append(m)
-
-    # Optional: If you want to add a system break after the major scale
-    # Since there's no minor scale, this might not be necessary
-    # If you still want to include it, ensure it's within a measure
-    # For example, add an empty measure with a system break
-    # sys_break_measure = stream.Measure()
-    # sys_break = layout.SystemLayout()
-    # sys_break.systemBreak = True
-    # sys_break_measure.append(sys_break)
-    # part.append(sys_break_measure)
-
-    # 6) Put Part in a Score
+    # 4) Create a Score
     score = stream.Score()
-    score.insert(0, part)
 
-    # 7) Write the Score to a PDF
+    if instrument_name != "Piano":
+        # Create a single-staff Part for non-Piano instruments
+        part = stream.Part()
+        instr = instrument.fromString(instrument_name)
+        instr.staffCount = 1  # Force a single staff (no braces for Piano)
+        part.insert(0, instr)
+
+        # Create the major scale key signature
+        major_key_obj = key.Key(key_signature, 'major')
+
+        # Create major scale measures
+        major_scale_obj = scale.MajorScale(key_signature)
+        major_measures = create_scale_measures(
+            title_text=f"{key_signature} Major Scale",
+            scale_object=major_scale_obj,
+            octave_start=octave_start,
+            num_octaves=num_octaves
+        )
+
+        # Insert Clef and Key Signature into the first measure
+        if major_measures:
+            first_measure = major_measures[0]
+            # Insert Clef
+            first_measure.insert(0, getattr(clef, selected_clef)())
+            # Insert Key Signature
+            first_measure.insert(0, major_key_obj)
+
+        # Append all measures to the part individually
+        for m in major_measures:
+            part.append(m)
+
+        # Add the part to the score
+        score.insert(0, part)
+
+    else:
+        # Handle Piano with two staves (Grand Staff)
+        # Right Hand Part
+        right_part = stream.Part()
+        right_instr = instrument.Piano()
+        right_instr.staves = [1]
+        right_part.insert(0, right_instr)
+
+        # Create the major scale key signature
+        major_key_obj_right = key.Key(key_signature, 'major')
+
+        # Create major scale measures for right hand
+        major_scale_obj_right = scale.MajorScale(key_signature)
+        major_measures_right = create_scale_measures(
+            title_text=f"{key_signature} Major Scale (RH)",
+            scale_object=major_scale_obj_right,
+            octave_start=octave_start,
+            num_octaves=num_octaves
+        )
+
+        # Insert Clef and Key Signature into the first measure for right hand
+        if major_measures_right:
+            first_measure_right = major_measures_right[0]
+            # Insert Treble Clef
+            first_measure_right.insert(0, clef.TrebleClef())
+            # Insert Key Signature
+            first_measure_right.insert(0, major_key_obj_right)
+
+        # Append all measures to the right hand part
+        for m in major_measures_right:
+            right_part.append(m)
+
+        # Left Hand Part
+        left_part = stream.Part()
+        left_instr = instrument.Piano()
+        left_instr.staves = [2]
+        left_part.insert(0, left_instr)
+
+        # Create the major scale key signature for left hand
+        major_key_obj_left = key.Key(key_signature, 'major')
+
+        # Create major scale measures for left hand, possibly an octave lower
+        major_scale_obj_left = scale.MajorScale(key_signature)
+        major_measures_left = create_scale_measures(
+            title_text=f"{key_signature} Major Scale (LH)",
+            scale_object=major_scale_obj_left,
+            octave_start=octave_start - 1,  # Lower octave for left hand
+            num_octaves=num_octaves
+        )
+
+        # Insert Bass Clef and Key Signature into the first measure for left hand
+        if major_measures_left:
+            first_measure_left = major_measures_left[0]
+            # Insert Bass Clef
+            first_measure_left.insert(0, clef.BassClef())
+            # Insert Key Signature
+            first_measure_left.insert(0, major_key_obj_left)
+
+        # Append all measures to the left hand part
+        for m in major_measures_left:
+            left_part.append(m)
+
+        # Add both parts to the score
+        score.insert(0, right_part)
+        score.insert(0, left_part)
+
+    # 5) Write the Score to a PDF
     file_name = f"{key_signature}_{instrument_name}_major_scales"
     output_path = os.path.join(output_folder, f"{file_name}.pdf")
     score.write("musicxml.pdf", fp=output_path)
@@ -215,6 +278,8 @@ def generate_and_save_scales_to_pdf(key_signature, num_octaves, instrument_name)
 
 # Example usage:
 if __name__ == "__main__":
-    # e.g. "F#" => measure #1: F# major, 
-    # with E# automatically displayed as F natural, etc.
-    generate_and_save_scales_to_pdf("F#", 2, "Clarinet")
+    # For non-Piano instruments
+    # generate_and_save_scales_to_pdf("F#", 1, "Trombone")
+
+    # For Piano with two staves
+    generate_and_save_scales_to_pdf("F#", 1, "Clarinet")
