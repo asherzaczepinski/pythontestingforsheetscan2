@@ -153,110 +153,6 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
 
     return measures_stream
 
-def create_arpeggio_measures(title_text, arpeggio_notes, octave_start, num_octaves, direction='up'):
-    """
-    Create a stream of Measures containing:
-      - A text title (above staff) at the beginning
-      - The arpeggio (up then down) split into multiple measures with the following rhythmic pattern:
-        - Each measure starts with a quarter note
-        - Followed by six eighth notes
-      - The arpeggio ends with a whole note in a separate measure
-      - Automatic rewriting of E# -> F, B# -> C, etc.
-      - Adjust octaves based on direction and number of octaves
-      - Preserve accidentals in the arpeggio
-    """
-    measures_stream = stream.Stream()
-
-    # Generate the arpeggio across the specified number of octaves
-    arpeggio_sequence = []
-    for octave in range(num_octaves):
-        if octave < num_octaves - 1:
-            # For all octaves except the last, exclude the P8 to prevent duplication
-            arpeggio_notes_per_octave = arpeggio_notes[:-1]
-        else:
-            # For the last octave, include the P8
-            arpeggio_notes_per_octave = arpeggio_notes.copy()
-        transposed_notes = [n.transpose(octave * 12) for n in arpeggio_notes_per_octave]
-        arpeggio_sequence.extend(transposed_notes)
-    
-    # Append the descending sequence (excluding the top note to avoid repetition)
-    descending_notes = list(reversed(arpeggio_sequence))
-    if descending_notes:
-        descending_notes = descending_notes[1:]  # Exclude the first note to prevent duplication
-    arpeggio_sequence += descending_notes
-
-    # Define the rhythmic pattern for each measure
-    notes_per_measure = 7  # 1 quarter + 6 eighths
-
-    # Initialize variables for iteration
-    current_measure = stream.Measure()
-    note_counter = 0
-
-    for i, n in enumerate(arpeggio_sequence):
-        # Handle the last note separately to assign it as a whole note in a new measure
-        if i == len(arpeggio_sequence) - 1:
-            if current_measure.notes:
-                measures_stream.append(current_measure)
-
-            # Create a new measure for the whole note
-            whole_note_measure = stream.Measure()
-
-            # Add the text expression to the whole note measure if it's the first measure
-            if i == 0:
-                txt = expressions.TextExpression(title_text)
-                txt.placement = 'above'
-                whole_note_measure.insert(0, txt)
-
-            # Create the whole note
-            wn = note.Note(n)
-            wn.duration = duration.Duration('whole')
-            # Show accidentals (like sharps, flats, naturals)
-            if wn.pitch.accidental:
-                wn.pitch.accidental.displayStatus = True
-            # Preserve accidentals by NOT fixing enharmonic spelling
-            whole_note_measure.append(wn)
-
-            # Append the whole note measure to the stream
-            measures_stream.append(whole_note_measure)
-            break
-
-        # Determine the position within the measure
-        position_in_measure = note_counter % notes_per_measure
-
-        if position_in_measure == 0:
-            # Start a new measure
-            if current_measure.notes:
-                measures_stream.append(current_measure)
-            current_measure = stream.Measure()
-
-            # Add the text expression to the first measure only
-            if i == 0:
-                txt = expressions.TextExpression(title_text)
-                txt.placement = 'above'
-                current_measure.insert(0, txt)
-
-            # Create a quarter note
-            qn = note.Note(n)
-            qn.duration = duration.Duration('quarter')
-            # Show accidentals (like sharps, flats, naturals)
-            if qn.pitch.accidental:
-                qn.pitch.accidental.displayStatus = True
-            # Preserve accidentals by NOT fixing enharmonic spelling
-            current_measure.append(qn)
-        else:
-            # Create an eighth note
-            en = note.Note(n)
-            en.duration = duration.Duration('eighth')
-            # Show accidentals (like sharps, flats, naturals)
-            if en.pitch.accidental:
-                en.pitch.accidental.displayStatus = True
-            # Preserve accidentals by NOT fixing enharmonic spelling
-            current_measure.append(en)
-
-        note_counter += 1
-
-    return measures_stream
-
 def clear_output_folder(folder_path):
     """
     Removes all files and subdirectories within the given folder.
@@ -271,9 +167,9 @@ def clear_output_folder(folder_path):
         except Exception as e:
             print(f"Error removing {file_path}: {e}")
 
-def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, instrument_name):
+def generate_and_save_scales_to_pdf(key_signature, num_octaves, instrument_name):
     """
-    Generates scales and arpeggios for the specified key, number of octaves, and instrument.
+    Generates scales for the specified key, number of octaves, and instrument.
     Saves the output as a PDF in the designated output folder.
     """
     # 1) Clear the output folder so it's empty before writing new files
@@ -311,22 +207,6 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             num_octaves=num_octaves
         )
 
-        # Create major arpeggio measures
-        # Define the arpeggio notes based on the major triad
-        arpeggio_notes = [
-            major_scale_obj.pitchFromDegree(1),
-            major_scale_obj.pitchFromDegree(3),
-            major_scale_obj.pitchFromDegree(5),
-            major_scale_obj.pitchFromDegree(1).transpose('P8')  # Octave above
-        ]
-        major_arpeggio_measures = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio",
-            arpeggio_notes=arpeggio_notes,
-            octave_start=0,  # No octave transposition; handled in the function
-            num_octaves=num_octaves,  # Use the num_octaves parameter
-            direction='up'
-        )
-
         # Insert Clef and Key Signature into the first measure of scale
         if major_measures:
             first_measure = major_measures[0]
@@ -335,19 +215,8 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             # Insert Key Signature
             first_measure.insert(0, major_key_obj)
 
-        # **Remove Clef and Key Signature Insertion into the first measure of arpeggio**
-        # Commented out to prevent adding clef and key signature before arpeggio
-        # if major_arpeggio_measures:
-        #     first_arpeggio_measure = major_arpeggio_measures[0]
-        #     first_arpeggio_measure.insert(0, getattr(clef, selected_clef)())
-        #     first_arpeggio_measure.insert(0, major_key_obj)
-
         # Append all scale measures to the part
         for m in major_measures:
-            part.append(m)
-
-        # Append all arpeggio measures to the part
-        for m in major_arpeggio_measures:
             part.append(m)
 
         # Add the part to the score
@@ -373,21 +242,6 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             num_octaves=num_octaves
         )
 
-        # Create major arpeggio measures for right hand
-        arpeggio_notes_right = [
-            major_scale_obj_right.pitchFromDegree(1),
-            major_scale_obj_right.pitchFromDegree(3),
-            major_scale_obj_right.pitchFromDegree(5),
-            major_scale_obj_right.pitchFromDegree(1).transpose('P8')  # Octave above
-        ]
-        major_arpeggio_measures_right = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio (RH)",
-            arpeggio_notes=arpeggio_notes_right,
-            octave_start=0,
-            num_octaves=num_octaves,  # Use the num_octaves parameter
-            direction='up'
-        )
-
         # Insert Clef and Key Signature into the first measure for right hand scale
         if major_measures_right:
             first_measure_right = major_measures_right[0]
@@ -396,19 +250,8 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             # Insert Key Signature
             first_measure_right.insert(0, major_key_obj_right)
 
-        # **Remove Clef and Key Signature Insertion into the first measure of right hand arpeggio**
-        # Commented out to prevent adding clef and key signature before arpeggio
-        # if major_arpeggio_measures_right:
-        #     first_arpeggio_measure_right = major_arpeggio_measures_right[0]
-        #     first_arpeggio_measure_right.insert(0, clef.TrebleClef())
-        #     first_arpeggio_measure_right.insert(0, major_key_obj_right)
-
         # Append all scale measures to the right hand part
         for m in major_measures_right:
-            right_part.append(m)
-
-        # Append all arpeggio measures to the right hand part
-        for m in major_arpeggio_measures_right:
             right_part.append(m)
 
         # Left Hand Part
@@ -429,21 +272,6 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             num_octaves=num_octaves
         )
 
-        # Create major arpeggio measures for left hand
-        arpeggio_notes_left = [
-            major_scale_obj_left.pitchFromDegree(1),
-            major_scale_obj_left.pitchFromDegree(3),
-            major_scale_obj_left.pitchFromDegree(5),
-            major_scale_obj_left.pitchFromDegree(1).transpose('-P8')  # Octave below
-        ]
-        major_arpeggio_measures_left = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio (LH)",
-            arpeggio_notes=arpeggio_notes_left,
-            octave_start=0,
-            num_octaves=num_octaves,  # Use the num_octaves parameter
-            direction='down'
-        )
-
         # Insert Clef and Key Signature into the first measure for left hand scale
         if major_measures_left:
             first_measure_left = major_measures_left[0]
@@ -452,19 +280,8 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
             # Insert Key Signature
             first_measure_left.insert(0, major_key_obj_left)
 
-        # **Remove Clef and Key Signature Insertion into the first measure of left hand arpeggio**
-        # Commented out to prevent adding clef and key signature before arpeggio
-        # if major_arpeggio_measures_left:
-        #     first_arpeggio_measure_left = major_arpeggio_measures_left[0]
-        #     first_arpeggio_measure_left.insert(0, clef.BassClef())
-        #     first_arpeggio_measure_left.insert(0, major_key_obj_left)
-
         # Append all scale measures to the left hand part
         for m in major_measures_left:
-            left_part.append(m)
-
-        # Append all arpeggio measures to the left hand part
-        for m in major_arpeggio_measures_left:
             left_part.append(m)
 
         # Add both parts to the score
@@ -472,7 +289,7 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
         score.insert(0, left_part)
 
     # 5) Write the Score to a PDF
-    file_name = f"{key_signature}_{instrument_name}_major_scales_and_arpeggios"
+    file_name = f"{key_signature}_{instrument_name}_major_scales"
     output_path = os.path.join(output_folder, f"{file_name}.pdf")
     score.write("musicxml.pdf", fp=output_path)
 
@@ -482,7 +299,7 @@ def generate_and_save_scales_and_arpeggios_to_pdf(key_signature, num_octaves, in
 if __name__ == "__main__":
     # For non-Piano instruments
     # Uncomment the line below to generate for a Trombone in F# major over 1 octave
-    # generate_and_save_scales_and_arpeggios_to_pdf("F#", 1, "Trombone")
+    # generate_and_save_scales_to_pdf("F#", 1, "Trombone")
 
     # For Piano with two staves and two octaves
-    generate_and_save_scales_and_arpeggios_to_pdf("F#", 2, "Clarinet")
+    generate_and_save_scales_to_pdf("F#", 2, "Clarinet")
