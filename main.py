@@ -15,29 +15,25 @@ ENHARM_MAP = {
     "Fb": ("E", 0),
 }
 
+
 # ------------------------------------------------------------------------
-# Updated determine_clef_and_octave
+# Determine Clef and Octave
 # ------------------------------------------------------------------------
 def determine_clef_and_octave(instrument_name, part='right'):
     """
     Return a recommended clef and default octave start based on the instrument.
     For piano, differentiate between right and left hands.
-
-    NOTE: These ranges and clefs are approximate, serving only as
-    a starting point. Real-world usage may need adjustments, particularly
-    for transposing instruments or advanced ranges.
     """
 
-    # If you need special logic for piano specifically:
+    # Piano logic
     if instrument_name == "Piano":
         return {"right": ("TrebleClef", 4), "left": ("BassClef", 2)}[part]
 
-    # If you need special logic for electric piano similarly:
+    # Electric Piano (if needed)
     if instrument_name == "Electric Piano":
-        return ("TrebleClef", 4)  # Simplified single staff
+        return ("TrebleClef", 4)
 
-    # Basic attempts at a suitable clef & starting octave for each instrument.
-    # Adjust as necessary for your needs.
+    # More instruments mapped:
     instrument_map = {
         # Strings
         "Violin":       ("TrebleClef", 3),
@@ -45,25 +41,25 @@ def determine_clef_and_octave(instrument_name, part='right'):
         "Cello":        ("BassClef",   2),
         "Double Bass":  ("BassClef",   1),
         "Guitar":       ("TrebleClef", 3),
-        "Harp":         ("TrebleClef", 3),  # Often written on grand staff
+        "Harp":         ("TrebleClef", 3),  # often grand staff, simplified
 
         # Woodwinds
         "Alto Saxophone":   ("TrebleClef", 3),
-        "Bass Clarinet":    ("TrebleClef", 2),  # Commonly notated in treble
+        "Bass Clarinet":    ("TrebleClef", 2),
         "Bassoon":          ("BassClef",   2),
         "Clarinet":         ("TrebleClef", 3),
         "English Horn":     ("TrebleClef", 4),
         "Flute":            ("TrebleClef", 4),
         "Oboe":             ("TrebleClef", 4),
-        "Piccolo":          ("TrebleClef", 5),  # Sounds an octave up, but simplified
+        "Piccolo":          ("TrebleClef", 5),
         "Tenor Saxophone":  ("TrebleClef", 3),
-        "Trumpet":          ("TrebleClef", 4),  # Transposing simplified
+        "Trumpet":          ("TrebleClef", 4),
 
         # Brass
         "Euphonium":    ("BassClef", 2),
         "French Horn":  ("TrebleClef", 3),
-        "Trombone":     ("BassClef",   2),
-        "Tuba":         ("BassClef",   1),
+        "Trombone":     ("BassClef", 2),
+        "Tuba":         ("BassClef", 1),
 
         # Percussion (pitched)
         "Marimba":      ("TrebleClef", 3),
@@ -78,16 +74,15 @@ def determine_clef_and_octave(instrument_name, part='right'):
         "Voice":        ("TrebleClef", 4),
     }
 
-    # For unpitched percussion or anything not in the map, default:
+    # For unpitched percussion or unknown, default:
     unpitched_percussion = {
         "Bass Drum", "Cymbals", "Snare Drum", "Triangle", "Tambourine"
     }
     if instrument_name in unpitched_percussion:
-        # You might skip scale generation or assign a generic clef:
         return ("PercussionClef", 4)
 
-    # Return the mapping if found; otherwise default to TrebleClef, 4
     return instrument_map.get(instrument_name, ("TrebleClef", 4))
+
 
 # ------------------------------------------------------------------------
 # Fix Enharmonic Spelling
@@ -111,17 +106,25 @@ def fix_enharmonic_spelling(n):
         n.pitch.accidental.displayStatus = True
         n.pitch.accidental.displayType = 'normal'
 
+
 # ------------------------------------------------------------------------
 # Create Scale Measures
 # ------------------------------------------------------------------------
 def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
+    """
+    Build an ascending + descending major scale (up to num_octaves).
+    Returns a Stream of measures (each measure 4/4, with 1 quarter + 6 eighths,
+    final note as a whole note).
+    """
     measures_stream = stream.Stream()
 
+    # Ascending pitches
     pitches_up = scale_object.getPitches(
         f"{scale_object.tonic.name}{octave_start}",
         f"{scale_object.tonic.name}{octave_start + num_octaves}"
     )
-    pitches_down = list(reversed(pitches_up[:-1]))  # omit repeated top
+    # Descending omits repeated top
+    pitches_down = list(reversed(pitches_up[:-1]))
     all_pitches = pitches_up + pitches_down
 
     notes_per_measure = 7  # 1 quarter + 6 eighths
@@ -129,13 +132,14 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
     note_counter = 0
 
     for i, p in enumerate(all_pitches):
-        # Last pitch => whole note
+        # If this is the last pitch => make it a whole note in a new measure
         if i == len(all_pitches) - 1:
             if current_measure.notes:
                 measures_stream.append(current_measure)
             whole_note_measure = stream.Measure()
 
             if i == 0:
+                # Insert text for the very first measure
                 txt = expressions.TextExpression(title_text)
                 txt.placement = 'above'
                 whole_note_measure.insert(0, txt)
@@ -149,11 +153,13 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
 
         position_in_measure = note_counter % notes_per_measure
         if position_in_measure == 0:
+            # Start a new measure
             if current_measure.notes:
                 measures_stream.append(current_measure)
             current_measure = stream.Measure()
 
             if i == 0:
+                # Insert text if it's the very first note
                 txt = expressions.TextExpression(title_text)
                 txt.placement = 'above'
                 current_measure.insert(0, txt)
@@ -172,28 +178,28 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
 
     return measures_stream
 
+
 # ------------------------------------------------------------------------
-# Create Arpeggio Measures (ALL EIGHTH NOTES + final WHOLE)
+# Create Arpeggio Measures
 # ------------------------------------------------------------------------
 def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves):
     """
     Create a major arpeggio (1–3–5–8), skipping repeated top notes between octaves.
-    - All notes except the final note are 8th notes.
-    - The final note is a whole note in a new measure.
-    - 8 eighth notes per measure => 4 beats of eighths in 4/4.
+    - All notes except the final are 8th notes in 4/4.
+    - Final note is a whole note in a new measure.
     """
     measures_stream = stream.Stream()
 
-    # 1) Gather scale pitches
+    # Gather scale pitches
     scale_pitches = scale_object.getPitches(
         f"{scale_object.tonic.name}{octave_start}",
         f"{scale_object.tonic.name}{octave_start + num_octaves}"
     )
 
-    # 2) Build the arpeggio going up (avoid repeated top note per octave)
+    # Build ascending arpeggio
     arpeggio_up = []
     for o in range(num_octaves):
-        base_idx = 7 * o
+        base_idx = 7 * o  # each octave: 7 notes apart in the major scale
         try:
             root = scale_pitches[base_idx + 0]  # 1
             third = scale_pitches[base_idx + 2] # 3
@@ -202,32 +208,26 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
             if o < num_octaves - 1:
                 arpeggio_up.extend([root, third, fifth])
             else:
-                # final octave => add the top note
+                # final octave => add top note (the octave)
                 octave_tone = scale_pitches[base_idx + 7]
                 arpeggio_up.extend([root, third, fifth, octave_tone])
         except IndexError:
-            # If we go out of bounds, just ignore
-            pass
+            pass  # out of range, ignore
 
-    # 3) Build the downward portion, omitting the final top note
-    if len(arpeggio_up) > 1:
-        arpeggio_down = list(reversed(arpeggio_up[:-1]))
-    else:
-        arpeggio_down = []
+    # Build descending portion (omit final top note)
+    arpeggio_down = list(reversed(arpeggio_up[:-1])) if len(arpeggio_up) > 1 else []
 
     all_arpeggio_pitches = arpeggio_up + arpeggio_down
 
-    # 4) 8 eighth notes per measure => 4 beats of eighths in 4/4
-    notes_per_measure = 8
+    notes_per_measure = 8  # 8 eighth notes per measure => 4 beats
     current_measure = stream.Measure()
     note_counter = 0
 
     for i, p in enumerate(all_arpeggio_pitches):
-        # If this is the last pitch => WHOLE note in a new measure
+        # Last pitch => whole note in new measure
         if i == len(all_arpeggio_pitches) - 1:
             if current_measure.notes:
                 measures_stream.append(current_measure)
-
             whole_note_measure = stream.Measure()
             if i == 0:
                 txt = expressions.TextExpression(title_text)
@@ -243,7 +243,6 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
 
         position_in_measure = note_counter % notes_per_measure
         if position_in_measure == 0:
-            # Start a new measure if necessary
             if current_measure.notes:
                 measures_stream.append(current_measure)
             current_measure = stream.Measure()
@@ -253,7 +252,7 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
                 txt.placement = 'above'
                 current_measure.insert(0, txt)
 
-        # ALL EIGHTH NOTES here
+        # All are eighth notes until final
         n = note.Note(p)
         n.duration = duration.Duration('eighth')
         fix_enharmonic_spelling(n)
@@ -263,8 +262,9 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
 
     return measures_stream
 
+
 # ------------------------------------------------------------------------
-# Create Custom Line (Your Additional "Notes and Shit")
+# Create Custom Line
 # ------------------------------------------------------------------------
 def create_custom_line_measures(
     title_text,
@@ -272,52 +272,48 @@ def create_custom_line_measures(
     note_duration='quarter'
 ):
     """
-    Creates one (or multiple) measures of user-defined notes, each with
+    Create one (or multiple) measures of user-defined notes, each with
     a specified duration. Inserts a text label at the start.
-
-    :param title_text: str - e.g. "My Custom Line"
-    :param notes_list: list of strings - e.g. ["C4", "D#4", "E4", "F5"]
-    :param note_duration: str or music21.duration.Duration - e.g. "quarter"
-    :return: stream.Stream of the custom line
     """
-
     measures_stream = stream.Stream()
     current_measure = stream.Measure()
     note_counter = 0
-    notes_per_measure = 8  # If you want 8 quarter notes per measure in 4/4
+    notes_per_measure = 8  # if you want 8 quarters in a 4/4 measure, for instance
 
     for i, note_name in enumerate(notes_list):
-        # If this is the very first note, insert a text expression:
         if i == 0:
+            # Insert text on the very first note
             txt = expressions.TextExpression(title_text)
             txt.placement = 'above'
             current_measure.insert(0, txt)
 
-        # If we've reached notes_per_measure, start a new measure
+        # Start new measure if we've hit the measure capacity
         if note_counter % notes_per_measure == 0 and note_counter != 0:
             measures_stream.append(current_measure)
             current_measure = stream.Measure()
 
-        # Create the note object
+        # Create note
         n = note.Note(note_name)
-        # Fix enharmonic spelling if needed
         fix_enharmonic_spelling(n)
-        # Assign the duration
         n.duration = duration.Duration(note_duration)
         current_measure.append(n)
-
         note_counter += 1
 
-    # Append the last measure if it has notes
+    # Append last measure if not empty
     if current_measure.notes:
         measures_stream.append(current_measure)
 
     return measures_stream
 
+
 # ------------------------------------------------------------------------
 # Clear Output Folder
 # ------------------------------------------------------------------------
 def clear_output_folder(folder_path):
+    """
+    Removes all files and subfolders in the specified folder.
+    Be sure you REALLY want to do this before calling!
+    """
     for filename in os.listdir(folder_path):
         file_path = os.path.join(folder_path, filename)
         try:
@@ -328,43 +324,32 @@ def clear_output_folder(folder_path):
         except Exception as e:
             print(f"Error removing {file_path}: {e}")
 
+
 # ------------------------------------------------------------------------
-# Single-Key PDF Generation
+# Create Score for a Single Key
 # ------------------------------------------------------------------------
-def generate_and_save_scales_arpeggios_to_pdf(
-    key_signature, 
-    num_octaves, 
+def create_score_for_single_key(
+    key_signature,
+    num_octaves,
     instrument_name,
-    custom_notes=None,  
-    output_folder="/Users/az/Desktop/pythontestingforsheetscan2/output"
+    custom_notes=None
 ):
     """
-    Generates:
-      1) A major scale (up/down)
-      2) A major arpeggio (all eighths + final whole)
-      3) Optionally, a line of custom notes
-    in ONE PDF, skipping repeated top notes between octaves.
+    Build and return a music21.stream.Score for a single key + instrument.
+    Includes:
+      - Major Scale (up/down)
+      - Major Arpeggio (up/down)
+      - Optional custom line of notes
     """
-    # 1) Clear output folder
-    #    NOTE: If you plan to generate multiple PDFs at once,
-    #    you might prefer to remove or comment out this line
-    clear_output_folder(output_folder)
+    # We'll build a Score, but won't write to disk here.
+    sc = stream.Score()
 
-    # 2) MuseScore environment
-    env = environment.Environment()
-    env['musicxmlPath'] = '/Applications/MuseScore 4.app/Contents/MacOS/mscore'
-    env['musescoreDirectPNGPath'] = '/Applications/MuseScore 4.app/Contents/MacOS/mscore'
-
-    # 3) Determine clef/octave
+    # Decide on clef and octave
     clef_octave = determine_clef_and_octave(instrument_name)
 
-    # 4) Create a Score
-    score = stream.Score()
-
-    # ------------------------------------------
-    # PIANO: Two parts (Right hand / Left hand)
-    # ------------------------------------------
+    # If it's piano: 2 parts (RH, LH)
     if instrument_name == "Piano":
+        # Right Hand
         right_part = stream.Part()
         right_instr = instrument.Piano()
         right_instr.staves = [1]
@@ -374,36 +359,46 @@ def generate_and_save_scales_arpeggios_to_pdf(
         major_scale_obj_right = scale.MajorScale(key_signature)
 
         # Scale (RH)
-        selected_clef, octave_start = clef_octave['right']
+        selected_clef_right, octave_start_right = clef_octave['right']
         scale_measures_right = create_scale_measures(
             title_text=f"{key_signature} Major Scale (RH)",
             scale_object=major_scale_obj_right,
-            octave_start=octave_start,
+            octave_start=octave_start_right,
             num_octaves=num_octaves
         )
         if scale_measures_right:
-            first_scale_measure_right = scale_measures_right[0]
-            first_scale_measure_right.insert(0, getattr(clef, selected_clef)())
-            first_scale_measure_right.insert(0, major_key_obj_right)
+            first_m = scale_measures_right[0]
+            first_m.insert(0, getattr(clef, selected_clef_right)())
+            first_m.insert(0, major_key_obj_right)
+        for m in scale_measures_right:
+            right_part.append(m)
 
         # Arpeggio (RH)
         arpeggio_measures_right = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio (RH)",
             scale_object=major_scale_obj_right,
-            octave_start=octave_start,
+            octave_start=octave_start_right,
             num_octaves=num_octaves
         )
         if arpeggio_measures_right:
-            first_arp_measure_right = arpeggio_measures_right[0]
-            first_arp_measure_right.insert(0, major_key_obj_right)
-
-        # Append RH
-        for m in scale_measures_right:
-            right_part.append(m)
+            first_arp = arpeggio_measures_right[0]
+            first_arp.insert(0, major_key_obj_right)
         for m in arpeggio_measures_right:
             right_part.append(m)
 
-        # Left part
+        # If we have custom notes, add them (example: also on RH)
+        if custom_notes:
+            custom_line = create_custom_line_measures(
+                title_text="Custom Line (Piano)",
+                notes_list=custom_notes
+            )
+            if custom_line:
+                first_custom = custom_line[0]
+                first_custom.insert(0, major_key_obj_right)
+            for m in custom_line:
+                right_part.append(m)
+
+        # Left Hand
         left_part = stream.Part()
         left_instr = instrument.Piano()
         left_instr.staves = [2]
@@ -420,9 +415,11 @@ def generate_and_save_scales_arpeggios_to_pdf(
             num_octaves=num_octaves
         )
         if scale_measures_left:
-            first_scale_measure_left = scale_measures_left[0]
-            first_scale_measure_left.insert(0, getattr(clef, selected_clef_left)())
-            first_scale_measure_left.insert(0, major_key_obj_left)
+            first_m_left = scale_measures_left[0]
+            first_m_left.insert(0, getattr(clef, selected_clef_left)())
+            first_m_left.insert(0, major_key_obj_left)
+        for m in scale_measures_left:
+            left_part.append(m)
 
         arpeggio_measures_left = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio (LH)",
@@ -431,53 +428,31 @@ def generate_and_save_scales_arpeggios_to_pdf(
             num_octaves=num_octaves
         )
         if arpeggio_measures_left:
-            first_arp_measure_left = arpeggio_measures_left[0]
-            first_arp_measure_left.insert(0, major_key_obj_left)
-
-        # Append LH
-        for m in scale_measures_left:
-            left_part.append(m)
+            first_arp_left = arpeggio_measures_left[0]
+            first_arp_left.insert(0, major_key_obj_left)
         for m in arpeggio_measures_left:
             left_part.append(m)
 
-        # If we have custom notes, let's just place them in the right part (example).
-        if custom_notes:
-            custom_line_measures = create_custom_line_measures(
-                title_text="Custom Line (Piano)",
-                notes_list=custom_notes,
-                note_duration="quarter"
-            )
-            # Insert key signature if you want them to reflect the same key
-            if custom_line_measures:
-                first_custom_measure = custom_line_measures[0]
-                first_custom_measure.insert(0, major_key_obj_right)
+        # Add both parts to the score
+        sc.insert(0, right_part)
+        sc.insert(0, left_part)
 
-            for m in custom_line_measures:
-                right_part.append(m)
-
-        # Add to score
-        score.insert(0, right_part)
-        score.insert(0, left_part)
-
-    # ------------------------------------------
-    # NON-PIANO: Single staff
-    # ------------------------------------------
     else:
+        # Single-staff instrument
         part = stream.Part()
-        instr = instrument.fromString(instrument_name)
-        instr.staffCount = 1
-        part.insert(0, instr)
+        instr_obj = instrument.fromString(instrument_name)
+        part.insert(0, instr_obj)
 
         major_key_obj = key.Key(key_signature, 'major')
         major_scale_obj = scale.MajorScale(key_signature)
 
-        # If the returned value is just a (clefType, octave) tuple:
+        # If determine_clef_and_octave is just a tuple:
         if isinstance(clef_octave, tuple):
             selected_clef, octave_start = clef_octave
         else:
             selected_clef, octave_start = ("TrebleClef", 4)
 
-        # SCALE measures
+        # Scale
         scale_measures = create_scale_measures(
             title_text=f"{key_signature} Major Scale",
             scale_object=major_scale_obj,
@@ -485,11 +460,13 @@ def generate_and_save_scales_arpeggios_to_pdf(
             num_octaves=num_octaves
         )
         if scale_measures:
-            first_measure_scale = scale_measures[0]
-            first_measure_scale.insert(0, getattr(clef, selected_clef)())
-            first_measure_scale.insert(0, major_key_obj)
+            first_scale_m = scale_measures[0]
+            first_scale_m.insert(0, getattr(clef, selected_clef)())
+            first_scale_m.insert(0, major_key_obj)
+        for m in scale_measures:
+            part.append(m)
 
-        # ARPEGGIO measures
+        # Arpeggio
         arpeggio_measures = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio",
             scale_object=major_scale_obj,
@@ -497,79 +474,88 @@ def generate_and_save_scales_arpeggios_to_pdf(
             num_octaves=num_octaves
         )
         if arpeggio_measures:
-            first_measure_arp = arpeggio_measures[0]
-            first_measure_arp.insert(0, major_key_obj)
-
-        # Append everything
-        for m in scale_measures:
-            part.append(m)
+            first_arp_m = arpeggio_measures[0]
+            first_arp_m.insert(0, major_key_obj)
         for m in arpeggio_measures:
             part.append(m)
 
-        # Finally, if we have custom notes
+        # Custom notes
         if custom_notes:
-            custom_line_measures = create_custom_line_measures(
+            custom_line = create_custom_line_measures(
                 title_text="My Custom Line",
-                notes_list=custom_notes,
-                note_duration="quarter"
+                notes_list=custom_notes
             )
-            if custom_line_measures:
-                first_custom_measure = custom_line_measures[0]
-                first_custom_measure.insert(0, major_key_obj)
-            for m in custom_line_measures:
+            if custom_line:
+                first_custom_m = custom_line[0]
+                first_custom_m.insert(0, major_key_obj)
+            for m in custom_line:
                 part.append(m)
 
-        score.insert(0, part)
+        sc.insert(0, part)
 
-    # 5) Write the entire Score to a SINGLE PDF
-    file_name = f"{key_signature}_{instrument_name}_maj_scales_arps"
-    output_path = os.path.join(output_folder, f"{file_name}.pdf")
+    return sc
 
-    # Write to PDF via musicxml
-    score.write("musicxml.pdf", fp=output_path)
-    print(f"PDF generated at: {output_path}")
 
 # ------------------------------------------------------------------------
-# NEW: Multi-Key PDF Generation
+# Generate Multi-Key PDF (All in ONE PDF)
 # ------------------------------------------------------------------------
-def generate_and_save_scales_arpeggios_for_multiple_keys(
-    key_signature_list, 
-    num_octaves, 
+def generate_multi_key_pdf(
+    key_signature_list,
+    num_octaves,
     instrument_name,
     custom_notes=None,
-    output_folder="/Users/az/Desktop/pythontestingforsheetscan2/output"
+    output_folder="/Users/az/Desktop/pythontestingforsheetscan2/output",
+    pdf_filename="Multi_Key_Maj_Scales_Arps.pdf"
 ):
     """
-    Generate scale/arpeggio PDFs for multiple keys in a single run.
-    This function loops over each key in key_signature_list and 
-    calls generate_and_save_scales_arpeggios_to_pdf() for each one.
-
-    :param key_signature_list: List[str], e.g. ["C", "F#", "B"]
-    :param num_octaves: int
-    :param instrument_name: str, e.g. "Alto Saxophone"
-    :param custom_notes: List[str] or None, optional
-    :param output_folder: str
+    Builds one combined Score containing scales/arpeggios for all keys in
+    key_signature_list, then writes it out to a single PDF.
     """
-    # If you'd rather NOT wipe out the output folder for each key,
-    # comment out the call to `clear_output_folder()` inside the single-key function.
+    # 1) (Optional) Clear the folder if desired
+    #    clear_output_folder(output_folder)
 
-    for key_sig in key_signature_list:
-        generate_and_save_scales_arpeggios_to_pdf(
-            key_signature=key_sig,
+    # 2) Configure the environment for MuseScore
+    env = environment.Environment()
+    env['musicxmlPath'] = '/Applications/MuseScore 4.app/Contents/MacOS/mscore'
+    env['musescoreDirectPNGPath'] = '/Applications/MuseScore 4.app/Contents/MacOS/mscore'
+
+    # 3) Create a master Score
+    master_score = stream.Score()
+
+    # 4) Loop through each key, build a sub-score, then append to master_score
+    for ks in key_signature_list:
+        sub_score = create_score_for_single_key(
+            key_signature=ks,
             num_octaves=num_octaves,
             instrument_name=instrument_name,
-            custom_notes=custom_notes,
-            output_folder=output_folder
+            custom_notes=custom_notes
         )
+        # Append each Part in sub_score to master_score
+        for p in sub_score.parts:
+            master_score.insert(len(master_score), p)
 
-# -------------- EXAMPLE USAGE --------------
+    # 5) Output final PDF
+    out_path = os.path.join(output_folder, pdf_filename)
+    master_score.write('musicxml.pdf', fp=out_path)
+    print(f"Single multi-key PDF created at: {out_path}")
+
+
+# ------------------------- EXAMPLE USAGE -------------------------
 if __name__ == "__main__":
-    # Generate PDFs for multiple keys: F#, C, and G major, 
-    # all with 1 octave, for Alto Sax, plus a custom line of notes:
+    # Example: 
+    #   * 3 keys: F#, C, G
+    #   * 1 octave
+    #   * Alto Sax
+    #   * Custom line of notes
+    #   * Single PDF
     multiple_keys = ["F#", "C", "G"]
-    generate_and_save_scales_arpeggios_for_multiple_keys(
+    custom_line = ["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
+
+    generate_multi_key_pdf(
         key_signature_list=multiple_keys,
         num_octaves=1,
         instrument_name="Alto Saxophone",
-        custom_notes=["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
+        custom_notes=custom_line,
+        output_folder="/Users/az/Desktop/pythontestingforsheetscan2/output",
+        pdf_filename="MyAltoSax_MultiKey.pdf"
     )
