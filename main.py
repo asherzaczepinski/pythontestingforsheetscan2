@@ -2,7 +2,7 @@ import os
 import shutil
 from music21 import (
     stream, note, key, scale, clef, instrument,
-    environment, expressions, layout, duration
+    environment, expressions, duration
 )
 
 # Enharmonic mapping: name -> (newName, octaveAdjustment)
