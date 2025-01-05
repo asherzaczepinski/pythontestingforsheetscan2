@@ -112,7 +112,7 @@ def fix_enharmonic_spelling(n):
         n.pitch.accidental.displayType = 'normal'
 
 # ------------------------------------------------------------------------
-# Create Scale Measures (unchanged)
+# Create Scale Measures
 # ------------------------------------------------------------------------
 def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
     measures_stream = stream.Stream()
@@ -180,7 +180,7 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
     Create a major arpeggio (1–3–5–8), skipping repeated top notes between octaves.
     - All notes except the final note are 8th notes.
     - The final note is a whole note in a new measure.
-    - 8 eighth notes per measure = 4 beats (4/4).
+    - 8 eighth notes per measure => 4 beats of eighths in 4/4.
     """
     measures_stream = stream.Stream()
 
@@ -206,6 +206,7 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
                 octave_tone = scale_pitches[base_idx + 7]
                 arpeggio_up.extend([root, third, fifth, octave_tone])
         except IndexError:
+            # If we go out of bounds, just ignore
             pass
 
     # 3) Build the downward portion, omitting the final top note
@@ -263,7 +264,7 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
     return measures_stream
 
 # ------------------------------------------------------------------------
-# New: Create Custom Line (Your Additional "Notes and Shit")
+# Create Custom Line (Your Additional "Notes and Shit")
 # ------------------------------------------------------------------------
 def create_custom_line_measures(
     title_text,
@@ -328,14 +329,14 @@ def clear_output_folder(folder_path):
             print(f"Error removing {file_path}: {e}")
 
 # ------------------------------------------------------------------------
-# Generate AND Save BOTH Scale & Arpeggio in the SAME PDF
-#   + optionally add a "custom line" of notes at the end
+# Single-Key PDF Generation
 # ------------------------------------------------------------------------
 def generate_and_save_scales_arpeggios_to_pdf(
     key_signature, 
     num_octaves, 
     instrument_name,
-    custom_notes=None  # <--- NEW optional argument
+    custom_notes=None,  
+    output_folder="/Users/az/Desktop/pythontestingforsheetscan2/output"
 ):
     """
     Generates:
@@ -345,7 +346,8 @@ def generate_and_save_scales_arpeggios_to_pdf(
     in ONE PDF, skipping repeated top notes between octaves.
     """
     # 1) Clear output folder
-    output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
+    #    NOTE: If you plan to generate multiple PDFs at once,
+    #    you might prefer to remove or comment out this line
     clear_output_folder(output_folder)
 
     # 2) MuseScore environment
@@ -439,7 +441,6 @@ def generate_and_save_scales_arpeggios_to_pdf(
             left_part.append(m)
 
         # If we have custom notes, let's just place them in the right part (example).
-        # Or you could create a new "Part" for custom notes.
         if custom_notes:
             custom_line_measures = create_custom_line_measures(
                 title_text="Custom Line (Piano)",
@@ -528,13 +529,46 @@ def generate_and_save_scales_arpeggios_to_pdf(
     score.write("musicxml.pdf", fp=output_path)
     print(f"PDF generated at: {output_path}")
 
+# ------------------------------------------------------------------------
+# NEW: Multi-Key PDF Generation
+# ------------------------------------------------------------------------
+def generate_and_save_scales_arpeggios_for_multiple_keys(
+    key_signature_list, 
+    num_octaves, 
+    instrument_name,
+    custom_notes=None,
+    output_folder="/Users/az/Desktop/pythontestingforsheetscan2/output"
+):
+    """
+    Generate scale/arpeggio PDFs for multiple keys in a single run.
+    This function loops over each key in key_signature_list and 
+    calls generate_and_save_scales_arpeggios_to_pdf() for each one.
 
-# ---------------- EXAMPLE USAGE ----------------
+    :param key_signature_list: List[str], e.g. ["C", "F#", "B"]
+    :param num_octaves: int
+    :param instrument_name: str, e.g. "Alto Saxophone"
+    :param custom_notes: List[str] or None, optional
+    :param output_folder: str
+    """
+    # If you'd rather NOT wipe out the output folder for each key,
+    # comment out the call to `clear_output_folder()` inside the single-key function.
+
+    for key_sig in key_signature_list:
+        generate_and_save_scales_arpeggios_to_pdf(
+            key_signature=key_sig,
+            num_octaves=num_octaves,
+            instrument_name=instrument_name,
+            custom_notes=custom_notes,
+            output_folder=output_folder
+        )
+
+# -------------- EXAMPLE USAGE --------------
 if __name__ == "__main__":
-    # Example: F# major scale + arpeggio, 1 octave, for Alto Sax
-    # PLUS a custom line of notes ["C4", "D#4", "F4", "G4"]
-    generate_and_save_scales_arpeggios_to_pdf(
-        key_signature="F#",
+    # Generate PDFs for multiple keys: F#, C, and G major, 
+    # all with 1 octave, for Alto Sax, plus a custom line of notes:
+    multiple_keys = ["F#", "C", "G"]
+    generate_and_save_scales_arpeggios_for_multiple_keys(
+        key_signature_list=multiple_keys,
         num_octaves=1,
         instrument_name="Alto Saxophone",
         custom_notes=["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
