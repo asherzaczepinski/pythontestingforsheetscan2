@@ -234,6 +234,9 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
     """
     Generates a major scale (up/down) and a major arpeggio (1–3–5–8) in ONE PDF,
     forcing the display of accidentals where needed.
+
+    *We remove clef insertion for the arpeggio, so the arpeggio just continues 
+     in the same staff without repeating the clef symbol.*
     """
     # 1) Clear output folder
     output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
@@ -276,17 +279,18 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
             first_measure_scale.insert(0, getattr(clef, selected_clef)())
             first_measure_scale.insert(0, major_key_obj)
 
-        # Create ARPEGGIO measures
+        # Create ARPEGGIO measures (no clef insertion here)
         arpeggio_measures = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio",
             scale_object=major_scale_obj,
             octave_start=octave_start,
             num_octaves=num_octaves
         )
-        # Insert clef + key signature at start of arpeggio if desired
+        # If you want the key repeated at the arpeggio, leave this line.
+        # If you don't want the key signature repeated, remove it too.
         if arpeggio_measures:
             first_measure_arp = arpeggio_measures[0]
-            first_measure_arp.insert(0, getattr(clef, selected_clef)())
+            # NO clef insertion here; only re-insert the key signature if desired:
             first_measure_arp.insert(0, major_key_obj)
 
         # Add them in order (scale, then arpeggio)
@@ -324,7 +328,7 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
             first_scale_measure_right.insert(0, clef.TrebleClef())
             first_scale_measure_right.insert(0, major_key_obj_right)
 
-        # RH Arpeggio
+        # RH Arpeggio (no clef insertion here)
         arpeggio_measures_right = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio (RH)",
             scale_object=major_scale_obj_right,
@@ -333,10 +337,10 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
         )
         if arpeggio_measures_right:
             first_arp_measure_right = arpeggio_measures_right[0]
-            first_arp_measure_right.insert(0, clef.TrebleClef())
+            # No clef inserted:
             first_arp_measure_right.insert(0, major_key_obj_right)
 
-        # Append them
+        # Append scale + arpeggio
         for m in scale_measures_right:
             right_part.append(m)
         for m in arpeggio_measures_right:
@@ -363,7 +367,7 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
             first_scale_measure_left.insert(0, clef.BassClef())
             first_scale_measure_left.insert(0, major_key_obj_left)
 
-        # LH Arpeggio
+        # LH Arpeggio (no clef insertion)
         arpeggio_measures_left = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio (LH)",
             scale_object=major_scale_obj_left,
@@ -372,10 +376,10 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
         )
         if arpeggio_measures_left:
             first_arp_measure_left = arpeggio_measures_left[0]
-            first_arp_measure_left.insert(0, clef.BassClef())
+            # No clef inserted:
             first_arp_measure_left.insert(0, major_key_obj_left)
 
-        # Append them
+        # Append scale + arpeggio
         for m in scale_measures_left:
             left_part.append(m)
         for m in arpeggio_measures_left:
@@ -389,7 +393,6 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
     # Write the entire Score (Scales + Arpeggios) to ONE PDF
     # ------------------------------------------------------
     file_name = f"{key_signature}_{instrument_name}_maj_scales_arps"
-    output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
     output_path = os.path.join(output_folder, f"{file_name}.pdf")
 
     score.write("musicxml.pdf", fp=output_path)
