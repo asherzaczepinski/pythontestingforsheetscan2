@@ -380,4 +380,4 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
 # ---------------- EXAMPLE USAGE ----------------
 if __name__ == "__main__":
     # e.g. F# major, 2 octaves, Clarinet => scale + arpeggio in one PDF
-    generate_and_save_scales_arpeggios_to_pdf("F#", 2, "Clarinet")
+    generate_and_save_scales_arpeggios_to_pdf("F#", 1, "Piano")
