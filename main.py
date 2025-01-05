@@ -61,14 +61,14 @@ def fix_enharmonic_spelling(n):
         n.pitch.accidental.displayType = 'normal'
 
 # ------------------------------------------------------------------------
-# Create Scale Measures
+# Create Scale Measures (Quarter + six Eighths, then Whole note)
 # ------------------------------------------------------------------------
 def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
     """
     Create a series of measures containing:
       - A text title (above staff) in the first measure
       - The scale going up, then down (omitting the top note duplication)
-      - Each measure has: 1 quarter note + 6 eighths = 4/4
+      - Each measure has: 1 quarter + 6 eighths = 4/4
       - The final note is placed in a separate measure as a whole note
       - Enharmonic fixes & forced accidental display
     """
@@ -79,7 +79,8 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
         f"{scale_object.tonic.name}{octave_start}",
         f"{scale_object.tonic.name}{octave_start + num_octaves}"
     )
-    pitches_down = list(reversed(pitches_up[:-1]))  # omit the repeated top note
+    # Omit the repeated top note
+    pitches_down = list(reversed(pitches_up[:-1]))
     all_pitches = pitches_up + pitches_down
 
     notes_per_measure = 7  # quarter + 6 eighths
@@ -132,13 +133,14 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
     return measures_stream
 
 # ------------------------------------------------------------------------
-# Create Arpeggio Measures
+# Create Arpeggio Measures (1–3–5–8, up then down), skipping repeated top note
 # ------------------------------------------------------------------------
 def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves):
     """
     Create a series of measures for a major arpeggio (1–3–5–8):
-      - For each octave, pick scale indices [0, 2, 4, 7]
-      - Then go back down, omitting the final top note
+      - For each octave *except the last*, pick (root, third, fifth).
+      - On the *final* octave, pick (root, third, fifth, octave).
+      - Then go back down, omitting the final top note.
       - 4 quarter notes per measure, last note is a whole note
       - Enharmonic fixes & forced accidental display
     """
@@ -150,21 +152,33 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
         f"{scale_object.tonic.name}{octave_start + num_octaves}"
     )
 
-    # 2) Build the arpeggio up
+    # 2) Build the arpeggio going up, skipping repeated top notes between octaves
     arpeggio_up = []
     for o in range(num_octaves):
         base_idx = 7 * o
         try:
-            root = scale_pitches[base_idx + 0]  # 1
-            third = scale_pitches[base_idx + 2] # 3
-            fifth = scale_pitches[base_idx + 4] # 5
-            octave_tone = scale_pitches[base_idx + 7] # 8
-            arpeggio_up.extend([root, third, fifth, octave_tone])
+            # 1, 3, 5:
+            root = scale_pitches[base_idx + 0]
+            third = scale_pitches[base_idx + 2]
+            fifth = scale_pitches[base_idx + 4]
+
+            if o < num_octaves - 1:
+                # For all but the last octave, do NOT add the top note
+                arpeggio_up.extend([root, third, fifth])
+            else:
+                # In the final octave, add the top note too
+                octave_tone = scale_pitches[base_idx + 7]
+                arpeggio_up.extend([root, third, fifth, octave_tone])
         except IndexError:
+            # If the scale doesn't have enough notes for some reason, ignore.
             pass
 
-    # 3) Build arpeggio down, omitting the last top note
-    arpeggio_down = list(reversed(arpeggio_up[:-1])) if len(arpeggio_up) > 1 else []
+    # 3) Build the downward version, omitting the very top note
+    if len(arpeggio_up) > 1:
+        arpeggio_down = list(reversed(arpeggio_up[:-1]))
+    else:
+        arpeggio_down = []
+
     all_arpeggio_pitches = arpeggio_up + arpeggio_down
 
     # 4) Put them in measures: 4 quarter notes each, final note => whole note
@@ -173,8 +187,8 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
     note_counter = 0
 
     for i, p in enumerate(all_arpeggio_pitches):
+        # If this is the last pitch => whole note in a new measure
         if i == len(all_arpeggio_pitches) - 1:
-            # Last pitch => whole note in new measure
             if current_measure.notes:
                 measures_stream.append(current_measure)
 
@@ -233,10 +247,8 @@ def clear_output_folder(folder_path):
 def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instrument_name):
     """
     Generates a major scale (up/down) and a major arpeggio (1–3–5–8) in ONE PDF,
-    forcing the display of accidentals where needed.
-
-    *We remove clef insertion for the arpeggio, so the arpeggio just continues 
-     in the same staff without repeating the clef symbol.*
+    forcing the display of accidentals where needed and avoiding repeated top notes
+    between octaves in the arpeggio.
     """
     # 1) Clear output folder
     output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
@@ -286,11 +298,10 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
             octave_start=octave_start,
             num_octaves=num_octaves
         )
-        # If you want the key repeated at the arpeggio, leave this line.
-        # If you don't want the key signature repeated, remove it too.
+        # If you want the key repeated at the arpeggio start, uncomment:
         if arpeggio_measures:
             first_measure_arp = arpeggio_measures[0]
-            # NO clef insertion here; only re-insert the key signature if desired:
+            # No clef insertion here:
             first_measure_arp.insert(0, major_key_obj)
 
         # Add them in order (scale, then arpeggio)
