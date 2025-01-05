@@ -16,25 +16,80 @@ ENHARM_MAP = {
 }
 
 # ------------------------------------------------------------------------
-# Determine Clef and Octave
+# Updated determine_clef_and_octave
 # ------------------------------------------------------------------------
 def determine_clef_and_octave(instrument_name, part='right'):
     """
     Return a recommended clef and default octave start based on the instrument.
-    For Piano, differentiate between right and left hands.
+    For piano, differentiate between right and left hands.
+
+    NOTE: These ranges and clefs are approximate, serving only as
+    a starting point. Real-world usage may need adjustments, particularly
+    for transposing instruments or advanced ranges.
     """
-    instrument_map = {
-        "Piano": {"right": ("TrebleClef", 4), "left": ("BassClef", 2)},
-        "Violin": ("TrebleClef", 3),
-        "Cello": ("BassClef", 2),
-        "Flute": ("TrebleClef", 4),
-        "Clarinet": ("TrebleClef", 3),
-        "Trumpet": ("TrebleClef", 4),
-        "Trombone": ("BassClef", 2),
-        "Guitar": ("TrebleClef", 3),
-    }
+
+    # If you need special logic for piano specifically:
     if instrument_name == "Piano":
-        return instrument_map[instrument_name][part]
+        return {"right": ("TrebleClef", 4), "left": ("BassClef", 2)}[part]
+
+    # If you need special logic for electric piano similarly:
+    if instrument_name == "Electric Piano":
+        return ("TrebleClef", 4)  # Simplified single staff
+
+    # Basic attempts at a suitable clef & starting octave for each instrument.
+    # Adjust as necessary for your needs.
+    instrument_map = {
+        # Strings
+        "Violin":       ("TrebleClef", 3),
+        "Viola":        ("AltoClef",   3),
+        "Cello":        ("BassClef",   2),
+        "Double Bass":  ("BassClef",   1),
+        "Guitar":       ("TrebleClef", 3),
+        "Harp":         ("TrebleClef", 3),  # Often written on grand staff, but we'll simplify
+
+        # Woodwinds
+        "Alto Saxophone":   ("TrebleClef", 3), 
+        "Bass Clarinet":    ("TrebleClef", 2),  # Real pitch is deeper, but commonly notated in treble
+        "Bassoon":          ("BassClef",   2),  
+        "Clarinet":         ("TrebleClef", 3),
+        "English Horn":     ("TrebleClef", 4),
+        "Flute":            ("TrebleClef", 4),
+        "Oboe":             ("TrebleClef", 4),
+        "Piccolo":          ("TrebleClef", 5),  # Sounds an octave up, but we’ll keep it simple
+        "Tenor Saxophone":  ("TrebleClef", 3),
+        "Trumpet":          ("TrebleClef", 4),  # Also transposing, but we’ll keep it simple
+
+        # Brass
+        "Euphonium":    ("BassClef", 2),  # Commonly in bass clef
+        "French Horn":  ("TrebleClef", 3),  
+        "Trombone":     ("BassClef",   2),
+        "Tuba":         ("BassClef",   1),
+
+        # Percussion (pitched)
+        "Marimba":      ("TrebleClef", 3), 
+        "Timpani":      ("BassClef",   3),
+        "Vibraphone":   ("TrebleClef", 3),
+        "Xylophone":    ("TrebleClef", 4),
+
+        # Keyboards
+        "Organ":        ("TrebleClef", 4),
+
+        # Voice
+        # If you want a single default, pick something in the mid-range:
+        "Voice":        ("TrebleClef", 4),
+    }
+
+    # For unpitched percussion or anything not in the map, we’ll default to
+    # a "PercussionClef" or fallback Treble, or skip scale generation entirely.
+    unpitched_percussion = {
+        "Bass Drum", "Cymbals", "Snare Drum", "Triangle", "Tambourine"
+    }
+
+    if instrument_name in unpitched_percussion:
+        # You might skip scale generation for these or assign a generic clef:
+        return ("PercussionClef", 4)
+
+    # Return the mapping if found; otherwise default to TrebleClef, 4
     return instrument_map.get(instrument_name, ("TrebleClef", 4))
 
 # ------------------------------------------------------------------------
@@ -242,21 +297,115 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
     env['musescoreDirectPNGPath'] = '/Applications/MuseScore 4.app/Contents/MacOS/mscore'
 
     # 3) Determine clef/octave
-    selected_clef, octave_start = determine_clef_and_octave(instrument_name)
+    #    (For piano, this might return a dict with {right:(), left:()}
+    #     so handle that case carefully.)
+    clef_octave = determine_clef_and_octave(instrument_name)
 
     # 4) Create a Score
     score = stream.Score()
 
-    # Non-piano instruments
-    if instrument_name != "Piano":
+    # ------------------------------------------
+    # PIANO: Two parts (Right hand / Left hand)
+    # ------------------------------------------
+    if instrument_name == "Piano":
+        right_part = stream.Part()
+        right_instr = instrument.Piano()
+        right_instr.staves = [1]
+        right_part.insert(0, right_instr)
+
+        major_key_obj_right = key.Key(key_signature, 'major')
+        major_scale_obj_right = scale.MajorScale(key_signature)
+
+        # Scale (RH)
+        # Here, clef_octave is a dict for 'right' & 'left'
+        selected_clef, octave_start = clef_octave['right']
+        scale_measures_right = create_scale_measures(
+            title_text=f"{key_signature} Major Scale (RH)",
+            scale_object=major_scale_obj_right,
+            octave_start=octave_start,
+            num_octaves=num_octaves
+        )
+        if scale_measures_right:
+            first_scale_measure_right = scale_measures_right[0]
+            first_scale_measure_right.insert(0, getattr(clef, selected_clef)())
+            first_scale_measure_right.insert(0, major_key_obj_right)
+
+        # Arpeggio (RH)
+        arpeggio_measures_right = create_arpeggio_measures(
+            title_text=f"{key_signature} Major Arpeggio (RH)",
+            scale_object=major_scale_obj_right,
+            octave_start=octave_start,
+            num_octaves=num_octaves
+        )
+        if arpeggio_measures_right:
+            first_arp_measure_right = arpeggio_measures_right[0]
+            first_arp_measure_right.insert(0, major_key_obj_right)
+
+        # Append RH
+        for m in scale_measures_right:
+            right_part.append(m)
+        for m in arpeggio_measures_right:
+            right_part.append(m)
+
+        # Left part
+        left_part = stream.Part()
+        left_instr = instrument.Piano()
+        left_instr.staves = [2]
+        left_part.insert(0, left_instr)
+
+        major_key_obj_left = key.Key(key_signature, 'major')
+        major_scale_obj_left = scale.MajorScale(key_signature)
+
+        selected_clef_left, octave_start_left = clef_octave['left']
+        scale_measures_left = create_scale_measures(
+            title_text=f"{key_signature} Major Scale (LH)",
+            scale_object=major_scale_obj_left,
+            octave_start=octave_start_left,
+            num_octaves=num_octaves
+        )
+        if scale_measures_left:
+            first_scale_measure_left = scale_measures_left[0]
+            first_scale_measure_left.insert(0, getattr(clef, selected_clef_left)())
+            first_scale_measure_left.insert(0, major_key_obj_left)
+
+        arpeggio_measures_left = create_arpeggio_measures(
+            title_text=f"{key_signature} Major Arpeggio (LH)",
+            scale_object=major_scale_obj_left,
+            octave_start=octave_start_left,
+            num_octaves=num_octaves
+        )
+        if arpeggio_measures_left:
+            first_arp_measure_left = arpeggio_measures_left[0]
+            first_arp_measure_left.insert(0, major_key_obj_left)
+
+        # Append LH
+        for m in scale_measures_left:
+            left_part.append(m)
+        for m in arpeggio_measures_left:
+            left_part.append(m)
+
+        # Add to score
+        score.insert(0, right_part)
+        score.insert(0, left_part)
+
+    # ------------------------------------------
+    # NON-PIANO: Single staff
+    # ------------------------------------------
+    else:
         part = stream.Part()
         instr = instrument.fromString(instrument_name)
         instr.staffCount = 1
         part.insert(0, instr)
 
-        # Key
         major_key_obj = key.Key(key_signature, 'major')
         major_scale_obj = scale.MajorScale(key_signature)
+
+        # If the returned value is just a (clefType, octave) tuple:
+        if isinstance(clef_octave, tuple):
+            selected_clef, octave_start = clef_octave
+        else:
+            # If it somehow returned a dict or something else, default:
+            selected_clef, octave_start = ("TrebleClef", 4)
 
         # SCALE measures
         scale_measures = create_scale_measures(
@@ -270,7 +419,7 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
             first_measure_scale.insert(0, getattr(clef, selected_clef)())
             first_measure_scale.insert(0, major_key_obj)
 
-        # ARPEGGIO measures (all eighth notes, no clef insertion here)
+        # ARPEGGIO measures
         arpeggio_measures = create_arpeggio_measures(
             title_text=f"{key_signature} Major Arpeggio",
             scale_object=major_scale_obj,
@@ -279,7 +428,6 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
         )
         if arpeggio_measures:
             first_measure_arp = arpeggio_measures[0]
-            # Insert the key if you want to see it again
             first_measure_arp.insert(0, major_key_obj)
 
         # Append everything
@@ -290,94 +438,17 @@ def generate_and_save_scales_arpeggios_to_pdf(key_signature, num_octaves, instru
 
         score.insert(0, part)
 
-    else:
-        # Piano => two staves
-        right_part = stream.Part()
-        right_instr = instrument.Piano()
-        right_instr.staves = [1]
-        right_part.insert(0, right_instr)
-
-        major_key_obj_right = key.Key(key_signature, 'major')
-        major_scale_obj_right = scale.MajorScale(key_signature)
-
-        # Scale (RH)
-        scale_measures_right = create_scale_measures(
-            title_text=f"{key_signature} Major Scale (RH)",
-            scale_object=major_scale_obj_right,
-            octave_start=octave_start,
-            num_octaves=num_octaves
-        )
-        if scale_measures_right:
-            first_scale_measure_right = scale_measures_right[0]
-            first_scale_measure_right.insert(0, clef.TrebleClef())
-            first_scale_measure_right.insert(0, major_key_obj_right)
-
-        # Arpeggio (RH) => all eighths except final whole
-        arpeggio_measures_right = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio (RH)",
-            scale_object=major_scale_obj_right,
-            octave_start=octave_start,
-            num_octaves=num_octaves
-        )
-        if arpeggio_measures_right:
-            first_arp_measure_right = arpeggio_measures_right[0]
-            first_arp_measure_right.insert(0, major_key_obj_right)
-
-        # Append
-        for m in scale_measures_right:
-            right_part.append(m)
-        for m in arpeggio_measures_right:
-            right_part.append(m)
-
-        # Left hand
-        left_part = stream.Part()
-        left_instr = instrument.Piano()
-        left_instr.staves = [2]
-        left_part.insert(0, left_instr)
-
-        major_key_obj_left = key.Key(key_signature, 'major')
-        major_scale_obj_left = scale.MajorScale(key_signature)
-
-        scale_measures_left = create_scale_measures(
-            title_text=f"{key_signature} Major Scale (LH)",
-            scale_object=major_scale_obj_left,
-            octave_start=octave_start - 1,
-            num_octaves=num_octaves
-        )
-        if scale_measures_left:
-            first_scale_measure_left = scale_measures_left[0]
-            first_scale_measure_left.insert(0, clef.BassClef())
-            first_scale_measure_left.insert(0, major_key_obj_left)
-
-        arpeggio_measures_left = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio (LH)",
-            scale_object=major_scale_obj_left,
-            octave_start=octave_start - 1,
-            num_octaves=num_octaves
-        )
-        if arpeggio_measures_left:
-            first_arp_measure_left = arpeggio_measures_left[0]
-            first_arp_measure_left.insert(0, major_key_obj_left)
-
-        # Append
-        for m in scale_measures_left:
-            left_part.append(m)
-        for m in arpeggio_measures_left:
-            left_part.append(m)
-
-        # Add to score
-        score.insert(0, right_part)
-        score.insert(0, left_part)
-
     # 5) Write the entire Score to a SINGLE PDF
     file_name = f"{key_signature}_{instrument_name}_maj_scales_arps"
     output_path = os.path.join(output_folder, f"{file_name}.pdf")
 
+    # Write to PDF via musicxml
     score.write("musicxml.pdf", fp=output_path)
     print(f"PDF generated at: {output_path}")
 
 
 # ---------------- EXAMPLE USAGE ----------------
 if __name__ == "__main__":
-    # e.g. F# major, 2 octaves, Clarinet => scale + arpeggio in one PDF
-    generate_and_save_scales_arpeggios_to_pdf("F#", 1, "Piano")
+    # Example: F# major scale + arpeggio, 1 octave, for Alto Sax
+    # (Will use the approximate clef + octave from the instrument_map above)
+    generate_and_save_scales_arpeggios_to_pdf("F#", 1, "Alto Saxophone")
