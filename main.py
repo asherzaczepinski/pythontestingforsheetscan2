@@ -13,7 +13,6 @@ from PyPDF2 import PdfMerger
 environment.set('musicxmlPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
 environment.set('musescoreDirectPNGPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
 
-
 # ------------------------------------------------------------------------
 # Enharmonic mapping: name -> (newName, octaveAdjustment)
 # ------------------------------------------------------------------------
@@ -234,52 +233,13 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
     return measures_stream
 
 
-def create_custom_line_measures(
-    title_text,
-    notes_list,
-    note_duration='quarter'
-):
-    """
-    Create measures of user-defined notes, each with a specified duration.
-    Text label is inserted at the very beginning.
-    """
-    measures_stream = stream.Stream()
-    current_measure = stream.Measure()
-    note_counter = 0
-    notes_per_measure = 8
-
-    for i, note_name in enumerate(notes_list):
-        if i == 0:
-            txt = expressions.TextExpression(title_text)
-            txt.placement = 'above'
-            current_measure.insert(0, txt)
-
-        if note_counter % notes_per_measure == 0 and note_counter != 0:
-            measures_stream.append(current_measure)
-            current_measure = stream.Measure()
-
-        n = note.Note(note_name)
-        fix_enharmonic_spelling(n)
-        n.duration = duration.Duration(note_duration)
-        current_measure.append(n)
-        note_counter += 1
-
-    if current_measure.notes:
-        measures_stream.append(current_measure)
-
-    return measures_stream
-
-
 def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, instrument_name):
     """
-    Builds ONE Part for the given key.
-    1) System break
-    2) Major Scale
-    3) System break
-    4) Major Arpeggio
-
-    The scale + arpeggio won't be attached by continuing barlines,
-    but they're in the same Part so they appear grouped for that key.
+    Builds ONE Part for the given key:
+      - System break
+      - Major Scale
+      - System break
+      - Major Arpeggio
     """
     part = stream.Part()
     instr_obj = instrument.fromString(instrument_name)
@@ -333,7 +293,8 @@ def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, inst
     return part
 
 
-def create_part_for_custom_notes(
+# ------------- SEPARATE CODE (now in its own PDF) -------------------------
+def create_custom_line_part(
     title_text,
     custom_notes,
     instrument_name,
@@ -341,37 +302,61 @@ def create_part_for_custom_notes(
     note_duration='quarter'
 ):
     """
-    Build a Part with user-defined notes. 
-    Starts on a fresh system so it doesn't connect to previous staves.
+    Build a Score with user-defined notes on a separate PDF page.
     """
+    # Build a single-part Score
+    score = stream.Score()
+
     part = stream.Part()
     instr_obj = instrument.fromString(instrument_name)
     part.insert(0, instr_obj)
 
-    # Force a new system break
+    # Force a new system break so it does not attach to prior staves
     part.insert(0, layout.SystemLayout(isNew=True))
 
     major_key_obj = key.Key(key_signature, 'major')
 
-    clef_octave = determine_clef_and_octave(instrument_name)
-    if isinstance(clef_octave, dict):
-        selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
-    else:
-        selected_clef, octave_start = clef_octave
+    # We won't dynamically guess octaves here unless you really want to
+    selected_clef, octave_start = determine_clef_and_octave(instrument_name)
+    # (We won't even use `octave_start` for rewriting note octaves, just the clef)
 
-    measures = create_custom_line_measures(
-        title_text=title_text,
-        notes_list=custom_notes,
-        note_duration=note_duration
-    )
-    if measures:
-        first_m = measures[0]
+    # Create the measures
+    measures_stream = stream.Stream()
+    current_measure = stream.Measure()
+    note_counter = 0
+    notes_per_measure = 8
+
+    for i, note_name in enumerate(custom_notes):
+        if i == 0:
+            txt = expressions.TextExpression(title_text)
+            txt.placement = 'above'
+            current_measure.insert(0, txt)
+
+        if note_counter % notes_per_measure == 0 and note_counter != 0:
+            measures_stream.append(current_measure)
+            current_measure = stream.Measure()
+
+        n = note.Note(note_name)
+        fix_enharmonic_spelling(n)
+        n.duration = duration.Duration(note_duration)
+        current_measure.append(n)
+        note_counter += 1
+
+    if current_measure.notes:
+        measures_stream.append(current_measure)
+
+    # Insert clef/key into first measure
+    if len(measures_stream) > 0:
+        first_m = measures_stream[0]
         first_m.insert(0, getattr(clef, selected_clef)())
         first_m.insert(0, major_key_obj)
-        for m in measures:
-            part.append(m)
 
-    return part
+    for m in measures_stream:
+        part.append(m)
+
+    # Now add the part to the Score
+    score.append(part)
+    return score
 
 
 if __name__ == "__main__":
@@ -379,41 +364,50 @@ if __name__ == "__main__":
     output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
     os.makedirs(output_folder, exist_ok=True)
 
-    # Configuration
-    multiple_keys = ["F#", "C", "G"]   # The keys you want
+    # Configuration for scales & arpeggios
+    multiple_keys = ["F#", "C", "G", "A", "B", "D", "E", "Eb"]
     num_octaves = 1
     instrument_name = "Alto Saxophone"
+
+    # Configuration for custom line (now separate PDF)
+    custom_line_title = "My Custom Line"
     custom_line = ["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
-    final_pdf = "All_in_One_Page.pdf"
 
-    # Create a single Score
-    score = stream.Score()
+    # --- 1) Create the PDF for Scales and Arpeggios ---
+    # Build a single Score with multiple keys
+    scales_arpeggios_score = stream.Score()
 
-    # For each key, make one Part that includes Scale + Arpeggio
-    # in separate systems, but grouped for that key.
+    # Add each key's Part
     for key_sig in multiple_keys:
         part_for_key = create_part_for_single_key_scales_arpeggios(
             key_signature=key_sig,
             num_octaves=num_octaves,
             instrument_name=instrument_name
         )
-        score.append(part_for_key)  # add the key group to the score
+        scales_arpeggios_score.append(part_for_key)
 
-    # Finally, add a custom line as a separate Part
-    part_for_custom = create_part_for_custom_notes(
-        title_text="Custom Line",
+    # Write out to "ScalesAndArpeggios.pdf"
+    scales_pdf = os.path.join(output_folder, "ScalesAndArpeggios.pdf")
+    try:
+        scales_arpeggios_score.write('musicxml.pdf', fp=scales_pdf)
+        print(f"PDF created at: {scales_pdf}")
+    except Exception as e:
+        print(f"Error writing Scales & Arpeggios PDF: {e}")
+        raise
+
+    # --- 2) Create a separate PDF for the Custom Line ---
+    custom_line_score = create_custom_line_part(
+        title_text=custom_line_title,
         custom_notes=custom_line,
         instrument_name=instrument_name,
-        key_signature="C",    # or whichever key
+        key_signature="C",
         note_duration='quarter'
     )
-    score.append(part_for_custom)
 
-    # Write out to one PDF
-    out_path = os.path.join(output_folder, final_pdf)
+    custom_pdf = os.path.join(output_folder, "CustomLine.pdf")
     try:
-        score.write('musicxml.pdf', fp=out_path)
-        print(f"PDF created at: {out_path}")
+        custom_line_score.write('musicxml.pdf', fp=custom_pdf)
+        print(f"PDF created at: {custom_pdf}")
     except Exception as e:
-        print(f"Error writing PDF: {e}")
+        print(f"Error writing Custom Line PDF: {e}")
         raise
