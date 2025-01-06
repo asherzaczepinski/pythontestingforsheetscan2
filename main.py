@@ -1,3 +1,5 @@
+#uses musescore 3
+
 import os
 import shutil
 from music21 import (
