@@ -1,5 +1,3 @@
-#uses musescore 3
-
 import os
 import shutil
 from music21 import (
@@ -24,7 +22,6 @@ ENHARM_MAP = {
     "Cb": ("B", -1),
     "Fb": ("E", 0),
 }
-
 
 def determine_clef_and_octave(instrument_name, part='right'):
     """
@@ -295,7 +292,8 @@ def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, inst
     return part
 
 
-# ------------- SEPARATE CODE (now in its own PDF) -------------------------
+# ------------- SEPARATE CODE (custom line), but we'll MERGE the PDFs -------------------------
+
 def create_custom_line_part(
     title_text,
     custom_notes,
@@ -304,7 +302,7 @@ def create_custom_line_part(
     note_duration='quarter'
 ):
     """
-    Build a Score with user-defined notes on a separate PDF page.
+    Build a Score with user-defined notes in its own Part.
     """
     # Build a single-part Score
     score = stream.Score()
@@ -371,7 +369,7 @@ if __name__ == "__main__":
     num_octaves = 1
     instrument_name = "Alto Saxophone"
 
-    # Configuration for custom line (now separate PDF)
+    # Configuration for custom line
     custom_line_title = "My Custom Line"
     custom_line = ["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
 
@@ -392,7 +390,7 @@ if __name__ == "__main__":
     scales_pdf = os.path.join(output_folder, "ScalesAndArpeggios.pdf")
     try:
         scales_arpeggios_score.write('musicxml.pdf', fp=scales_pdf)
-        print(f"PDF created at: {scales_pdf}")
+        print(f"Scales & Arpeggios PDF created at: {scales_pdf}")
     except Exception as e:
         print(f"Error writing Scales & Arpeggios PDF: {e}")
         raise
@@ -409,7 +407,18 @@ if __name__ == "__main__":
     custom_pdf = os.path.join(output_folder, "CustomLine.pdf")
     try:
         custom_line_score.write('musicxml.pdf', fp=custom_pdf)
-        print(f"PDF created at: {custom_pdf}")
+        print(f"Custom Line PDF created at: {custom_pdf}")
     except Exception as e:
         print(f"Error writing Custom Line PDF: {e}")
         raise
+
+    # --- 3) MERGE BOTH PDFs INTO A SINGLE FILE ---
+    combined_pdf = os.path.join(output_folder, "AllInOne.pdf")
+
+    merger = PdfMerger()
+    merger.append(scales_pdf)
+    merger.append(custom_pdf)
+    merger.write(combined_pdf)
+    merger.close()
+
+    print(f"Combined PDF (Scales/Arpeggios + Custom Line) created at: {combined_pdf}")
