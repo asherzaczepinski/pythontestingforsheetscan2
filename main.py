@@ -2,9 +2,17 @@ import os
 import shutil
 from music21 import (
     stream, note, key, scale, clef, instrument,
-    environment, expressions, duration
+    environment, expressions, duration, layout
 )
 from PyPDF2 import PdfMerger
+
+# ------------------------------------------------------------------------
+# Point music21 to MuseScore 3
+# ------------------------------------------------------------------------
+# IMPORTANT: Adjust the path if MuseScore 3 is in a different location
+environment.set('musescoreDirectPNGPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
+environment.set('musicxmlPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
+
 
 # ------------------------------------------------------------------------
 # Enharmonic mapping: name -> (newName, octaveAdjustment)
@@ -27,9 +35,9 @@ def determine_clef_and_octave(instrument_name, part='right'):
 
     # Piano logic
     if instrument_name == "Piano":
-        return {"right": ("TrebleClef", 4), "left": ("BassClef", 2)}[part]
+        return {"right": ("TrebleClef", 4), "left": ("BassClef", 2)}
 
-    # Electric Piano (if needed)
+    # Electric Piano
     if instrument_name == "Electric Piano":
         return ("TrebleClef", 4)
 
@@ -41,7 +49,7 @@ def determine_clef_and_octave(instrument_name, part='right'):
         "Cello":        ("BassClef",   2),
         "Double Bass":  ("BassClef",   1),
         "Guitar":       ("TrebleClef", 3),
-        "Harp":         ("TrebleClef", 3),  # often grand staff, simplified
+        "Harp":         ("TrebleClef", 3),  # often uses grand staff, simplified here
 
         # Woodwinds
         "Alto Saxophone":   ("TrebleClef", 3),
@@ -302,172 +310,69 @@ def create_custom_line_measures(
     return measures_stream
 
 # ------------------------------------------------------------------------
-# Clear Output Folder
+# Create Score for a Single Key (Scales and Arpeggios) in One Part
 # ------------------------------------------------------------------------
-def clear_output_folder(folder_path):
-    """
-    Removes all files and subfolders in the specified folder.
-    Be sure you REALLY want to do this before calling!
-    """
-    for filename in os.listdir(folder_path):
-        file_path = os.path.join(folder_path, filename)
-        try:
-            if os.path.isfile(file_path):
-                os.remove(file_path)
-            elif os.path.isdir(file_path):
-                shutil.rmtree(file_path)
-        except Exception as e:
-            print(f"Error removing {file_path}: {e}")
-
-# ------------------------------------------------------------------------
-# Create Score for a Single Key (Scales and Arpeggios)
-# ------------------------------------------------------------------------
-def create_score_for_single_key_scales_arpeggios(
+def create_part_for_single_key_scales_arpeggios(
     key_signature,
     num_octaves,
     instrument_name
 ):
     """
-    Build and return a music21.stream.Score for a single key + instrument.
-    Includes:
-      - Major Scale (up/down)
-      - Major Arpeggio (up/down)
+    Build and return a Part for a single key + instrument
+    that contains a Major Scale (up/down) and Major Arpeggio (up/down).
     """
-    # We'll build a Score, but won't write to disk here.
-    sc = stream.Score()
+    part = stream.Part()
+
+    # Insert a SystemLayout so that each part starts on a new system
+    part.insert(0, layout.SystemLayout(isNew=True))
+
+    instr_obj = instrument.fromString(instrument_name)
+    part.insert(0, instr_obj)
+
+    major_key_obj = key.Key(key_signature, 'major')
+    major_scale_obj = scale.MajorScale(key_signature)
 
     # Decide on clef and octave
     clef_octave = determine_clef_and_octave(instrument_name)
-
-    # If it's piano: 2 parts (RH, LH)
-    if instrument_name == "Piano":
-        # Right Hand
-        right_part = stream.Part()
-        right_instr = instrument.Piano()
-        right_instr.staves = [1]
-        right_part.insert(0, right_instr)
-
-        major_key_obj_right = key.Key(key_signature, 'major')
-        major_scale_obj_right = scale.MajorScale(key_signature)
-
-        # Scale (RH)
-        selected_clef_right, octave_start_right = clef_octave['right']
-        scale_measures_right = create_scale_measures(
-            title_text=f"{key_signature} Major Scale (RH)",
-            scale_object=major_scale_obj_right,
-            octave_start=octave_start_right,
-            num_octaves=num_octaves
-        )
-        if scale_measures_right:
-            first_m = scale_measures_right[0]
-            first_m.insert(0, getattr(clef, selected_clef_right)())
-            first_m.insert(0, major_key_obj_right)
-        for m in scale_measures_right:
-            right_part.append(m)
-
-        # Arpeggio (RH)
-        arpeggio_measures_right = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio (RH)",
-            scale_object=major_scale_obj_right,
-            octave_start=octave_start_right,
-            num_octaves=num_octaves
-        )
-        if arpeggio_measures_right:
-            first_arp = arpeggio_measures_right[0]
-            first_arp.insert(0, major_key_obj_right)
-        for m in arpeggio_measures_right:
-            right_part.append(m)
-
-        # Left Hand
-        left_part = stream.Part()
-        left_instr = instrument.Piano()
-        left_instr.staves = [2]
-        left_part.insert(0, left_instr)
-
-        major_key_obj_left = key.Key(key_signature, 'major')
-        major_scale_obj_left = scale.MajorScale(key_signature)
-
-        selected_clef_left, octave_start_left = clef_octave['left']
-        scale_measures_left = create_scale_measures(
-            title_text=f"{key_signature} Major Scale (LH)",
-            scale_object=major_scale_obj_left,
-            octave_start=octave_start_left,
-            num_octaves=num_octaves
-        )
-        if scale_measures_left:
-            first_m_left = scale_measures_left[0]
-            first_m_left.insert(0, getattr(clef, selected_clef_left)())
-            first_m_left.insert(0, major_key_obj_left)
-        for m in scale_measures_left:
-            left_part.append(m)
-
-        arpeggio_measures_left = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio (LH)",
-            scale_object=major_scale_obj_left,
-            octave_start=octave_start_left,
-            num_octaves=num_octaves
-        )
-        if arpeggio_measures_left:
-            first_arp_left = arpeggio_measures_left[0]
-            first_arp_left.insert(0, major_key_obj_left)
-        for m in arpeggio_measures_left:
-            left_part.append(m)
-
-        # Add both parts to the score
-        sc.insert(0, right_part)
-        sc.insert(0, left_part)
-
+    if isinstance(clef_octave, dict):
+        # If it's piano, default to 'right' for demonstration
+        selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
     else:
-        # Single-staff instrument
-        part = stream.Part()
-        instr_obj = instrument.fromString(instrument_name)
-        part.insert(0, instr_obj)
+        selected_clef, octave_start = clef_octave
 
-        major_key_obj = key.Key(key_signature, 'major')
-        major_scale_obj = scale.MajorScale(key_signature)
+    # Scale
+    scale_measures = create_scale_measures(
+        title_text=f"{key_signature} Major Scale",
+        scale_object=major_scale_obj,
+        octave_start=octave_start,
+        num_octaves=num_octaves
+    )
+    if scale_measures:
+        first_scale_m = scale_measures[0]
+        first_scale_m.insert(0, getattr(clef, selected_clef)())
+        first_scale_m.insert(0, major_key_obj)
+    for m in scale_measures:
+        part.append(m)
 
-        # If determine_clef_and_octave is just a tuple:
-        if isinstance(clef_octave, tuple):
-            selected_clef, octave_start = clef_octave
-        else:
-            selected_clef, octave_start = ("TrebleClef", 4)
+    # Arpeggio
+    arpeggio_measures = create_arpeggio_measures(
+        title_text=f"{key_signature} Major Arpeggio",
+        scale_object=major_scale_obj,
+        octave_start=octave_start,
+        num_octaves=num_octaves
+    )
+    if arpeggio_measures:
+        first_arp_m = arpeggio_measures[0]
+        first_arp_m.insert(0, major_key_obj)
+    for m in arpeggio_measures:
+        part.append(m)
 
-        # Scale
-        scale_measures = create_scale_measures(
-            title_text=f"{key_signature} Major Scale",
-            scale_object=major_scale_obj,
-            octave_start=octave_start,
-            num_octaves=num_octaves
-        )
-        if scale_measures:
-            first_scale_m = scale_measures[0]
-            first_scale_m.insert(0, getattr(clef, selected_clef)())
-            first_scale_m.insert(0, major_key_obj)
-        for m in scale_measures:
-            part.append(m)
-
-        # Arpeggio
-        arpeggio_measures = create_arpeggio_measures(
-            title_text=f"{key_signature} Major Arpeggio",
-            scale_object=major_scale_obj,
-            octave_start=octave_start,
-            num_octaves=num_octaves
-        )
-        if arpeggio_measures:
-            first_arp_m = arpeggio_measures[0]
-            first_arp_m.insert(0, major_key_obj)
-        for m in arpeggio_measures:
-            part.append(m)
-
-        # Add part to score
-        sc.insert(0, part)
-
-    return sc
+    return part
 
 # ------------------------------------------------------------------------
-# Create Score for Custom Notes
+# Create Part for Custom Notes
 # ------------------------------------------------------------------------
-def create_score_for_custom_notes(
+def create_part_for_custom_notes(
     title_text,
     custom_notes,
     instrument_name,
@@ -475,26 +380,25 @@ def create_score_for_custom_notes(
     note_duration='quarter'
 ):
     """
-    Build and return a music21.stream.Score containing only custom notes.
+    Build and return a Part for user-defined notes.
     """
-    sc = stream.Score()
-
-    # Single-staff instrument
     part = stream.Part()
+    # Force a system break so it doesn't connect to the previous part/staff
+    part.insert(0, layout.SystemLayout(isNew=True))
+
     instr_obj = instrument.fromString(instrument_name)
     part.insert(0, instr_obj)
 
     major_key_obj = key.Key(key_signature, 'major')
 
-    # Determine clef and octave
+    # Determine clef
     clef_octave = determine_clef_and_octave(instrument_name)
     if isinstance(clef_octave, dict):
-        # For instruments like Piano, default to 'right' hand
+        # For piano example, just pick "right"
         selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
     else:
         selected_clef, octave_start = clef_octave
 
-    # Create custom measures
     custom_measures = create_custom_line_measures(
         title_text=title_text,
         notes_list=custom_notes,
@@ -507,162 +411,51 @@ def create_score_for_custom_notes(
     for m in custom_measures:
         part.append(m)
 
-    sc.insert(0, part)
-
-    return sc
+    return part
 
 # ------------------------------------------------------------------------
-# Generate PDF for Scales and Arpeggios (One Key per PDF)
-# ------------------------------------------------------------------------
-def generate_scales_arpeggios_pdf(
-    key_signature,
-    num_octaves,
-    instrument_name,
-    output_folder,
-    pdf_filename
-):
-    """
-    Generates a PDF for a single key's scales and arpeggios.
-    """
-    sc = create_score_for_single_key_scales_arpeggios(
-        key_signature=key_signature,
-        num_octaves=num_octaves,
-        instrument_name=instrument_name
-    )
-    out_path = os.path.join(output_folder, pdf_filename)
-    try:
-        sc.write('musicxml.pdf', fp=out_path)
-        print(f"PDF for {key_signature} created at: {out_path}")
-    except Exception as e:
-        print(f"Error writing PDF for {key_signature}: {e}")
-        raise
-    return out_path
-
-# ------------------------------------------------------------------------
-# Generate Custom Notes PDF
-# ------------------------------------------------------------------------
-def generate_custom_notes_pdf(
-    title_text,
-    custom_notes,
-    instrument_name,
-    output_folder,
-    pdf_filename,
-    key_signature="C",
-    note_duration='quarter'
-):
-    """
-    Generates a separate PDF for custom notes.
-    """
-    sc = create_score_for_custom_notes(
-        title_text=title_text,
-        custom_notes=custom_notes,
-        instrument_name=instrument_name,
-        key_signature=key_signature,
-        note_duration=note_duration
-    )
-    out_path = os.path.join(output_folder, pdf_filename)
-    try:
-        sc.write('musicxml.pdf', fp=out_path)
-        print(f"Custom notes PDF created at: {out_path}")
-    except Exception as e:
-        print(f"Error writing custom notes PDF: {e}")
-        raise
-
-    return out_path
-
-# ------------------------------------------------------------------------
-# Merge PDFs into Final PDF
-# ------------------------------------------------------------------------
-def merge_pdfs(
-    pdf_paths,
-    output_pdf_path
-):
-    """
-    Merges multiple PDFs into a single PDF.
-    """
-    merger = PdfMerger()
-    try:
-        for pdf in pdf_paths:
-            if os.path.exists(pdf):
-                merger.append(pdf)
-                print(f"Added '{pdf}' to the merger.")
-            else:
-                print(f"Warning: '{pdf}' does not exist and will be skipped.")
-        merger.write(output_pdf_path)
-        merger.close()
-        print(f"Final merged PDF created at: {output_pdf_path}")
-    except Exception as e:
-        print(f"Error merging PDFs: {e}")
-        raise
-
-# ------------------------------------------------------------------------
-# Clear Output Folder (Optional)
-# ------------------------------------------------------------------------
-def clear_output(output_folder):
-    """
-    Clears the output folder. Use with caution.
-    """
-    confirm = input(f"Are you sure you want to clear the folder '{output_folder}'? (yes/no): ")
-    if confirm.lower() == 'yes':
-        clear_output_folder(output_folder)
-        print(f"Output folder '{output_folder}' has been cleared.")
-    else:
-        print("Clearing output folder skipped.")
-
-# ------------------------------------------------------------------------
-# Main Execution
+# Example: Generate a Single PDF with All Sections, Using MuseScore 3
 # ------------------------------------------------------------------------
 if __name__ == "__main__":
+
+    # Change this to your desired output folder:
+    output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
+    os.makedirs(output_folder, exist_ok=True)
+
     # Configuration
-    multiple_keys = ["F#", "C", "G"]  # List of keys to generate
+    multiple_keys = ["F#", "C", "G"]  # List of keys
     num_octaves = 1
     instrument_name = "Alto Saxophone"
     custom_line = ["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
-    output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
-    final_pdf = "Final_Sheet.pdf"
+    final_pdf = "All_in_One_Page.pdf"
 
-    # Ensure output directory exists
-    os.makedirs(output_folder, exist_ok=True)
+    # Create a single Score
+    score = stream.Score()
 
-    # Optional: Clear the output folder
-    # Uncomment the line below to enable clearing the output folder
-    # clear_output(output_folder)
+    # For each key, create a Part that has Scale + Arpeggio
+    for key_sig in multiple_keys:
+        part_for_key = create_part_for_single_key_scales_arpeggios(
+            key_signature=key_sig,
+            num_octaves=num_octaves,
+            instrument_name=instrument_name
+        )
+        score.insert(0, part_for_key)
 
+    # Then create a Part for custom notes
+    part_for_custom = create_part_for_custom_notes(
+        title_text="Custom Line",
+        custom_notes=custom_line,
+        instrument_name=instrument_name,
+        key_signature="C",    # or whatever you prefer
+        note_duration='quarter'
+    )
+    score.insert(0, part_for_custom)
+
+    # Write out to a single PDF using MuseScore 3
+    out_path = os.path.join(output_folder, final_pdf)
     try:
-        # List to hold paths of all individual PDFs
-        all_pdf_paths = []
-
-        # Generate individual PDFs for each key
-        for key_sig in multiple_keys:
-            pdf_filename = f"{instrument_name.replace(' ', '_')}_{key_sig}_Scale_Arpeggio.pdf"
-            pdf_path = generate_scales_arpeggios_pdf(
-                key_signature=key_sig,
-                num_octaves=num_octaves,
-                instrument_name=instrument_name,
-                output_folder=output_folder,
-                pdf_filename=pdf_filename
-            )
-            all_pdf_paths.append(pdf_path)
-
-        # Generate custom notes PDF
-        custom_notes_pdf = f"{instrument_name.replace(' ', '_')}_Custom_Notes.pdf"
-        custom_notes_path = generate_custom_notes_pdf(
-            title_text="Custom Line",
-            custom_notes=custom_line,
-            instrument_name=instrument_name,
-            output_folder=output_folder,
-            pdf_filename=custom_notes_pdf,
-            key_signature="C",  # You can adjust this as needed
-            note_duration='quarter'
-        )
-        all_pdf_paths.append(custom_notes_path)
-
-        # Merge all PDFs into a single final PDF
-        final_pdf_path = os.path.join(output_folder, final_pdf)
-        merge_pdfs(
-            pdf_paths=all_pdf_paths,
-            output_pdf_path=final_pdf_path
-        )
-
+        score.write('musicxml.pdf', fp=out_path)
+        print(f"Single PDF created at: {out_path}")
     except Exception as e:
-        print(f"An error occurred during PDF generation or merging: {e}")
+        print(f"Error writing single-page PDF: {e}")
+        raise
