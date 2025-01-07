@@ -1,24 +1,21 @@
 import os
+import shutil
 from music21 import (
     stream, note, key, scale, clef, instrument,
     environment, expressions, duration, layout
 )
 from PyPDF2 import PdfMerger
-import warnings
 
-# Suppress specific SSL warnings if they are not critical
-warnings.filterwarnings(
-    "ignore",
-    message="urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'.",
-    category=UserWarning,
-    module='urllib3'
-)
-
+# ------------------------------------------------------------------------
 # Point music21 to MuseScore 3
+# NOTE: If MuseScore 3 is installed elsewhere, change this path accordingly.
+# ------------------------------------------------------------------------
 environment.set('musicxmlPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
 environment.set('musescoreDirectPNGPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
 
+# ------------------------------------------------------------------------
 # Enharmonic mapping: name -> (newName, octaveAdjustment)
+# ------------------------------------------------------------------------
 ENHARM_MAP = {
     "E#": ("F", 0),
     "B#": ("C", +1),
@@ -83,6 +80,7 @@ def determine_clef_and_octave(instrument_name, part='right'):
 
     return instrument_map.get(instrument_name, ("TrebleClef", 4))
 
+
 def fix_enharmonic_spelling(n):
     """
     Rename notes like E#, B#, Cb, Fb to simpler spellings, adjusting octave as needed.
@@ -100,6 +98,7 @@ def fix_enharmonic_spelling(n):
     if n.pitch.accidental is not None:
         n.pitch.accidental.displayStatus = True
         n.pitch.accidental.displayType = 'normal'
+
 
 def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
     """
@@ -159,6 +158,7 @@ def create_scale_measures(title_text, scale_object, octave_start, num_octaves):
         note_counter += 1
 
     return measures_stream
+
 
 def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves):
     """
@@ -231,6 +231,69 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
 
     return measures_stream
 
+
+def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, instrument_name):
+    """
+    Builds ONE Part for the given key:
+      - System break
+      - Major Scale
+      - System break
+      - Major Arpeggio
+    """
+    part = stream.Part()
+    instr_obj = instrument.fromString(instrument_name)
+    part.insert(0, instr_obj)
+
+    # Insert system break so each key starts fresh
+    part.insert(0, layout.SystemLayout(isNew=True))
+
+    major_key_obj = key.Key(key_signature, 'major')
+    major_scale_obj = scale.MajorScale(key_signature)
+
+    # Decide clef + octave
+    clef_octave = determine_clef_and_octave(instrument_name)
+    if isinstance(clef_octave, dict):
+        selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
+    else:
+        selected_clef, octave_start = clef_octave
+
+    # --- Major Scale ---
+    scale_measures = create_scale_measures(
+        title_text=f"{key_signature} Major Scale",
+        scale_object=major_scale_obj,
+        octave_start=octave_start,
+        num_octaves=num_octaves
+    )
+    if scale_measures:
+        first_m = scale_measures[0]
+        first_m.insert(0, getattr(clef, selected_clef)())  # add clef
+        first_m.insert(0, major_key_obj)                   # add key signature
+        for m in scale_measures:
+            part.append(m)
+
+    # Insert a system break to prevent barline connections
+    part.append(layout.SystemLayout(isNew=True))
+
+    # --- Major Arpeggio ---
+    arpeggio_measures = create_arpeggio_measures(
+        title_text=f"{key_signature} Major Arpeggio",
+        scale_object=major_scale_obj,
+        octave_start=octave_start,
+        num_octaves=num_octaves
+    )
+    if arpeggio_measures:
+        # On the first measure, re-insert the key signature so that
+        # the new system is labeled properly
+        first_arp = arpeggio_measures[0]
+        first_arp.insert(0, major_key_obj)
+        for m in arpeggio_measures:
+            part.append(m)
+
+    return part
+
+
+# ------------- SEPARATE CODE (custom line), but we'll MERGE the PDFs -------------------------
+
 def create_custom_line_part(
     title_text,
     custom_notes,
@@ -239,21 +302,25 @@ def create_custom_line_part(
     note_duration='quarter'
 ):
     """
-    Build a Part with user-defined notes.
+    Build a Score with user-defined notes in its own Part.
     """
+    # Build a single-part Score
+    score = stream.Score()
+
     part = stream.Part()
-    
     instr_obj = instrument.fromString(instrument_name)
-    instr_obj.instrumentName = ''  # Remove instrument name
-    instr_obj.partName = ''        # Remove part name
     part.insert(0, instr_obj)
 
-    # Insert system break
+    # Force a new system break so it does not attach to prior staves
     part.insert(0, layout.SystemLayout(isNew=True))
 
     major_key_obj = key.Key(key_signature, 'major')
-    selected_clef, _ = determine_clef_and_octave(instrument_name)
 
+    # We won't dynamically guess octaves here unless you really want to
+    selected_clef, octave_start = determine_clef_and_octave(instrument_name)
+    # (We won't even use `octave_start` for rewriting note octaves, just the clef)
+
+    # Create the measures
     measures_stream = stream.Stream()
     current_measure = stream.Measure()
     note_counter = 0
@@ -278,130 +345,80 @@ def create_custom_line_part(
     if current_measure.notes:
         measures_stream.append(current_measure)
 
+    # Insert clef/key into first measure
     if len(measures_stream) > 0:
         first_m = measures_stream[0]
-        first_m.insert(0, getattr(clef, selected_clef)())  # add clef
-        first_m.insert(0, major_key_obj)                   # add key signature
+        first_m.insert(0, getattr(clef, selected_clef)())
+        first_m.insert(0, major_key_obj)
 
     for m in measures_stream:
         part.append(m)
 
-    return part
+    # Now add the part to the Score
+    score.append(part)
+    return score
 
-def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, instrument_name):
-    """
-    Creates separate Parts for scale and arpeggio for each key.
-    Returns a Score object containing these parts.
-    """
-    # Create a Score to hold the Parts
-    key_score = stream.Score()
-
-    major_key_obj = key.Key(key_signature, 'major')
-    major_scale_obj = scale.MajorScale(key_signature)
-
-    # Decide clef + octave
-    clef_octave = determine_clef_and_octave(instrument_name)
-    if isinstance(clef_octave, dict):
-        selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
-    else:
-        selected_clef, octave_start = clef_octave
-
-    # --- Major Scale ---
-    scale_measures = create_scale_measures(
-        title_text=f"{key_signature} Major Scale",
-        scale_object=major_scale_obj,
-        octave_start=octave_start,
-        num_octaves=num_octaves
-    )
-    if scale_measures:
-        scale_part = stream.Part()
-        instr_obj = instrument.fromString(instrument_name)
-        instr_obj.instrumentName = ''  # Remove instrument name
-        instr_obj.partName = ''        # Remove part name
-        scale_part.insert(0, instr_obj)
-        first_m = scale_measures[0]
-        first_m.insert(0, getattr(clef, selected_clef)())  # add clef
-        first_m.insert(0, major_key_obj)                   # add key signature
-        for m in scale_measures:
-            scale_part.append(m)
-        key_score.append(scale_part)
-
-    # --- Major Arpeggio ---
-    arpeggio_measures = create_arpeggio_measures(
-        title_text=f"{key_signature} Major Arpeggio",
-        scale_object=major_scale_obj,
-        octave_start=octave_start,
-        num_octaves=num_octaves
-    )
-    if arpeggio_measures:
-        arpeggio_part = stream.Part()
-        instr_obj = instrument.fromString(instrument_name)
-        instr_obj.instrumentName = ''  # Remove instrument name
-        instr_obj.partName = ''        # Remove part name
-        arpeggio_part.insert(0, instr_obj)
-        first_arp = arpeggio_measures[0]
-        first_arp.insert(0, getattr(clef, selected_clef)())  # add clef
-        first_arp.insert(0, major_key_obj)                   # add key signature
-        for m in arpeggio_measures:
-            arpeggio_part.append(m)
-        key_score.append(arpeggio_part)
-
-    return key_score
 
 if __name__ == "__main__":
+    # Adjust this output folder as needed
     output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
     os.makedirs(output_folder, exist_ok=True)
 
-    # Configuration
+    # Configuration for scales & arpeggios
     multiple_keys = ["F#", "C", "G", "A", "B", "D", "E", "Eb"]
     num_octaves = 1
     instrument_name = "Alto Saxophone"
+
+    # Configuration for custom line
     custom_line_title = "My Custom Line"
     custom_line = ["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
 
-    # Create the complete container score
-    complete_score = stream.Score()
+    # --- 1) Create the PDF for Scales and Arpeggios ---
+    # Build a single Score with multiple keys
+    scales_arpeggios_score = stream.Score()
 
-    # Adjust page layout manually since A3 is not predefined in music21
-    # A3 dimensions in points: 842 (width) x 1191 (height)
-    pl = layout.PageLayout()
-    pl.pageWidth = 842    # A3 width in points
-    pl.pageHeight = 1191  # A3 height in points
-    pl.leftMargin = 50     # Reduced left margin (points)
-    pl.rightMargin = 50    # Reduced right margin (points)
-    pl.topMargin = 50      # Reduced top margin (points)
-    pl.bottomMargin = 50   # Reduced bottom margin (points)
-    complete_score.insert(0, pl)
-
-    # Add each key's scales and arpeggios as separate Parts
+    # Add each key's Part
     for key_sig in multiple_keys:
-        key_score = create_part_for_single_key_scales_arpeggios(
+        part_for_key = create_part_for_single_key_scales_arpeggios(
             key_signature=key_sig,
             num_octaves=num_octaves,
             instrument_name=instrument_name
         )
-        for part in key_score.parts:
-            complete_score.append(part)
+        scales_arpeggios_score.append(part_for_key)
 
-    # Add custom line as a separate Part
-    custom_part = create_custom_line_part(
+    # Write out to "ScalesAndArpeggios.pdf"
+    scales_pdf = os.path.join(output_folder, "ScalesAndArpeggios.pdf")
+    try:
+        scales_arpeggios_score.write('musicxml.pdf', fp=scales_pdf)
+        print(f"Scales & Arpeggios PDF created at: {scales_pdf}")
+    except Exception as e:
+        print(f"Error writing Scales & Arpeggios PDF: {e}")
+        raise
+
+    # --- 2) Create a separate PDF for the Custom Line ---
+    custom_line_score = create_custom_line_part(
         title_text=custom_line_title,
         custom_notes=custom_line,
         instrument_name=instrument_name,
         key_signature="C",
         note_duration='quarter'
     )
-    complete_score.append(custom_part)
 
-    # Ensure that all parts start on their own system to prevent overlapping
-    for part in complete_score.parts:
-        part.insert(0, layout.SystemLayout(isNew=True))
-
-    # Write the complete score to a single PDF
-    output_pdf = os.path.join(output_folder, "Complete_Score.pdf")
+    custom_pdf = os.path.join(output_folder, "CustomLine.pdf")
     try:
-        complete_score.write('musicxml.pdf', fp=output_pdf)
-        print(f"Complete score PDF created at: {output_pdf}")
+        custom_line_score.write('musicxml.pdf', fp=custom_pdf)
+        print(f"Custom Line PDF created at: {custom_pdf}")
     except Exception as e:
-        print(f"Error writing complete score PDF: {e}")
+        print(f"Error writing Custom Line PDF: {e}")
         raise
+
+    # --- 3) MERGE BOTH PDFs INTO A SINGLE FILE ---
+    combined_pdf = os.path.join(output_folder, "AllInOne.pdf")
+
+    merger = PdfMerger()
+    merger.append(scales_pdf)
+    merger.append(custom_pdf)
+    merger.write(combined_pdf)
+    merger.close()
+
+    print(f"Combined PDF (Scales/Arpeggios + Custom Line) created at: {combined_pdf}")
