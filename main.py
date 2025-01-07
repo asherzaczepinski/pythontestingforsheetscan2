@@ -223,65 +223,6 @@ def create_arpeggio_measures(title_text, scale_object, octave_start, num_octaves
 
     return measures_stream
 
-def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, instrument_name):
-    """
-    Builds ONE Part for the given key:
-      - System break
-      - Major Scale
-      - System break
-      - Major Arpeggio
-    """
-    part = stream.Part()
-    instr_obj = instrument.fromString(instrument_name)
-    part.insert(0, instr_obj)
-
-    # Insert system break so each key starts fresh
-    part.insert(0, layout.SystemLayout(isNew=True))
-
-    major_key_obj = key.Key(key_signature, 'major')
-    major_scale_obj = scale.MajorScale(key_signature)
-
-    # Decide clef + octave
-    clef_octave = determine_clef_and_octave(instrument_name)
-    if isinstance(clef_octave, dict):
-        selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
-    else:
-        selected_clef, octave_start = clef_octave
-
-    # --- Major Scale ---
-    scale_measures = create_scale_measures(
-        title_text=f"{key_signature} Major Scale",
-        scale_object=major_scale_obj,
-        octave_start=octave_start,
-        num_octaves=num_octaves
-    )
-    if scale_measures:
-        first_m = scale_measures[0]
-        first_m.insert(0, getattr(clef, selected_clef)())  # add clef
-        first_m.insert(0, major_key_obj)                   # add key signature
-        for m in scale_measures:
-            part.append(m)
-
-    # Insert a system break before the arpeggio
-    part.append(layout.SystemLayout(isNew=True))
-
-    # --- Major Arpeggio ---
-    arpeggio_measures = create_arpeggio_measures(
-        title_text=f"{key_signature} Major Arpeggio",
-        scale_object=major_scale_obj,
-        octave_start=octave_start,
-        num_octaves=num_octaves
-    )
-    if arpeggio_measures:
-        # On the first measure, re-insert the key signature so that
-        # the new system is labeled properly
-        first_arp = arpeggio_measures[0]
-        first_arp.insert(0, major_key_obj)
-        for m in arpeggio_measures:
-            part.append(m)
-
-    return part
-
 def create_custom_line_part(
     title_text,
     custom_notes,
