@@ -1,8 +1,8 @@
 import os
+import shutil
 from music21 import (
     stream, note, key, scale, clef, instrument,
-    environment, expressions, duration, layout,
-    metadata  # Added this import
+    environment, expressions, duration, layout
 )
 from PyPDF2 import PdfMerger
 
@@ -280,29 +280,28 @@ def create_custom_line_part(
     score.append(part)
     return score
 
+
 def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, instrument_name):
     """
-    Creates an independent Score for each key's scale and arpeggio
+    Creates a Score (not just a Part) for each key to ensure independence
     """
     score = stream.Score()
-    # Add metadata to force new page
-    score.metadata = metadata.Metadata()
+    part = stream.Part()
     
-    # Create scale part
-    scale_part = stream.Part()
     instr_obj = instrument.fromString(instrument_name)
-    scale_part.insert(0, instr_obj)
-    
+    part.insert(0, instr_obj)
+
     major_key_obj = key.Key(key_signature, 'major')
     major_scale_obj = scale.MajorScale(key_signature)
 
+    # Decide clef + octave
     clef_octave = determine_clef_and_octave(instrument_name)
     if isinstance(clef_octave, dict):
         selected_clef, octave_start = clef_octave.get('right', ("TrebleClef", 4))
     else:
         selected_clef, octave_start = clef_octave
 
-    # Create scale measures
+    # --- Major Scale ---
     scale_measures = create_scale_measures(
         title_text=f"{key_signature} Major Scale",
         scale_object=major_scale_obj,
@@ -311,12 +310,12 @@ def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, inst
     )
     if scale_measures:
         first_m = scale_measures[0]
-        first_m.insert(0, getattr(clef, selected_clef)())
-        first_m.insert(0, major_key_obj)
+        first_m.insert(0, getattr(clef, selected_clef)())  # add clef
+        first_m.insert(0, major_key_obj)                   # add key signature
         for m in scale_measures:
-            scale_part.append(m)
+            part.append(m)
 
-    # Create arpeggio part (completely separate)
+    # --- Major Arpeggio (in a new Part to ensure separation) ---
     arpeggio_part = stream.Part()
     arpeggio_part.insert(0, instr_obj)
     
@@ -328,13 +327,13 @@ def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, inst
     )
     if arpeggio_measures:
         first_arp = arpeggio_measures[0]
-        first_arp.insert(0, getattr(clef, selected_clef)())
-        first_arp.insert(0, major_key_obj)
+        first_arp.insert(0, getattr(clef, selected_clef)())  # add clef
+        first_arp.insert(0, major_key_obj)                   # add key signature
         for m in arpeggio_measures:
             arpeggio_part.append(m)
 
     # Add both parts to the score
-    score.append(scale_part)
+    score.append(part)
     score.append(arpeggio_part)
     return score
 
@@ -349,20 +348,23 @@ if __name__ == "__main__":
     custom_line_title = "My Custom Line"
     custom_line = ["C4", "D#4", "F4", "G4", "A4", "Bb4", "B#4", "C5"]
 
-    # Create separate PDFs for each key's scales and arpeggios
-    scales_pdfs = []
+    # Create the complete container score
+    complete_score = stream.Score()
+
+    # Add each key's scales and arpeggios as separate Score objects
     for key_sig in multiple_keys:
         key_score = create_part_for_single_key_scales_arpeggios(
             key_signature=key_sig,
             num_octaves=num_octaves,
             instrument_name=instrument_name
         )
-        
-        key_pdf = os.path.join(output_folder, f"{key_sig}_scale_arpeggio.pdf")
-        key_score.write('musicxml.pdf', fp=key_pdf)
-        scales_pdfs.append(key_pdf)
+        # Convert the Score to a Part to add it to the complete score
+        key_part = stream.Part()
+        for measure in key_score.recurse().getElementsByClass('Measure'):
+            key_part.append(measure)
+        complete_score.append(key_part)
 
-    # Create custom line as completely separate PDF
+    # Add custom line as a separate Score
     custom_line_score = create_custom_line_part(
         title_text=custom_line_title,
         custom_notes=custom_line,
@@ -370,26 +372,18 @@ if __name__ == "__main__":
         key_signature="C",
         note_duration='quarter'
     )
-    custom_pdf = os.path.join(output_folder, "custom_line.pdf")
-    custom_line_score.write('musicxml.pdf', fp=custom_pdf)
-
-    # Merge all PDFs in the desired order
-    merger = PdfMerger()
     
-    # Add all scales/arpeggios first
-    for pdf in scales_pdfs:
-        merger.append(pdf)
-    
-    # Add custom line at the end
-    merger.append(custom_pdf)
-    
-    # Write final combined PDF
-    final_pdf = os.path.join(output_folder, "Complete_Score.pdf")
-    merger.write(final_pdf)
-    merger.close()
+    # Add the custom line score as another independent part
+    custom_part = stream.Part()
+    for measure in custom_line_score.recurse().getElementsByClass('Measure'):
+        custom_part.append(measure)
+    complete_score.append(custom_part)
 
-    # Clean up individual PDFs
-    for pdf in scales_pdfs + [custom_pdf]:
-        os.remove(pdf)
-
-    print(f"Complete score created at: {final_pdf}")
+    # Write the complete score to a single PDF
+    output_pdf = os.path.join(output_folder, "Complete_Score.pdf")
+    try:
+        complete_score.write('musicxml.pdf', fp=output_pdf)
+        print(f"Complete score PDF created at: {output_pdf}")
+    except Exception as e:
+        print(f"Error writing complete score PDF: {e}")
+        raise
