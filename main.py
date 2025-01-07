@@ -1,10 +1,18 @@
 import os
-import shutil
 from music21 import (
     stream, note, key, scale, clef, instrument,
     environment, expressions, duration, layout
 )
 from PyPDF2 import PdfMerger
+import warnings
+
+# Suppress specific SSL warnings if they are not critical
+warnings.filterwarnings(
+    "ignore",
+    message="urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'.",
+    category=UserWarning,
+    module='urllib3'
+)
 
 # Point music21 to MuseScore 3
 environment.set('musicxmlPath', '/Applications/MuseScore 3.app/Contents/MacOS/mscore')
@@ -231,12 +239,13 @@ def create_custom_line_part(
     note_duration='quarter'
 ):
     """
-    Build a Score with user-defined notes in its own Part.
+    Build a Part with user-defined notes.
     """
-    score = stream.Score()
     part = stream.Part()
     
     instr_obj = instrument.fromString(instrument_name)
+    instr_obj.instrumentName = ''  # Remove instrument name
+    instr_obj.partName = ''        # Remove part name
     part.insert(0, instr_obj)
 
     # Insert system break
@@ -271,25 +280,21 @@ def create_custom_line_part(
 
     if len(measures_stream) > 0:
         first_m = measures_stream[0]
-        first_m.insert(0, getattr(clef, selected_clef)())
-        first_m.insert(0, major_key_obj)
+        first_m.insert(0, getattr(clef, selected_clef)())  # add clef
+        first_m.insert(0, major_key_obj)                   # add key signature
 
     for m in measures_stream:
         part.append(m)
 
-    score.append(part)
-    return score
-
+    return part
 
 def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, instrument_name):
     """
-    Creates a Score (not just a Part) for each key to ensure independence
+    Creates separate Parts for scale and arpeggio for each key.
+    Returns a Score object containing these parts.
     """
-    score = stream.Score()
-    part = stream.Part()
-    
-    instr_obj = instrument.fromString(instrument_name)
-    part.insert(0, instr_obj)
+    # Create a Score to hold the Parts
+    key_score = stream.Score()
 
     major_key_obj = key.Key(key_signature, 'major')
     major_scale_obj = scale.MajorScale(key_signature)
@@ -309,16 +314,19 @@ def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, inst
         num_octaves=num_octaves
     )
     if scale_measures:
+        scale_part = stream.Part()
+        instr_obj = instrument.fromString(instrument_name)
+        instr_obj.instrumentName = ''  # Remove instrument name
+        instr_obj.partName = ''        # Remove part name
+        scale_part.insert(0, instr_obj)
         first_m = scale_measures[0]
         first_m.insert(0, getattr(clef, selected_clef)())  # add clef
         first_m.insert(0, major_key_obj)                   # add key signature
         for m in scale_measures:
-            part.append(m)
+            scale_part.append(m)
+        key_score.append(scale_part)
 
-    # --- Major Arpeggio (in a new Part to ensure separation) ---
-    arpeggio_part = stream.Part()
-    arpeggio_part.insert(0, instr_obj)
-    
+    # --- Major Arpeggio ---
     arpeggio_measures = create_arpeggio_measures(
         title_text=f"{key_signature} Major Arpeggio",
         scale_object=major_scale_obj,
@@ -326,16 +334,19 @@ def create_part_for_single_key_scales_arpeggios(key_signature, num_octaves, inst
         num_octaves=num_octaves
     )
     if arpeggio_measures:
+        arpeggio_part = stream.Part()
+        instr_obj = instrument.fromString(instrument_name)
+        instr_obj.instrumentName = ''  # Remove instrument name
+        instr_obj.partName = ''        # Remove part name
+        arpeggio_part.insert(0, instr_obj)
         first_arp = arpeggio_measures[0]
         first_arp.insert(0, getattr(clef, selected_clef)())  # add clef
         first_arp.insert(0, major_key_obj)                   # add key signature
         for m in arpeggio_measures:
             arpeggio_part.append(m)
+        key_score.append(arpeggio_part)
 
-    # Add both parts to the score
-    score.append(part)
-    score.append(arpeggio_part)
-    return score
+    return key_score
 
 if __name__ == "__main__":
     output_folder = "/Users/az/Desktop/pythontestingforsheetscan2/output"
@@ -351,33 +362,40 @@ if __name__ == "__main__":
     # Create the complete container score
     complete_score = stream.Score()
 
-    # Add each key's scales and arpeggios as separate Score objects
+    # Adjust page layout manually since A3 is not predefined in music21
+    # A3 dimensions in points: 842 (width) x 1191 (height)
+    pl = layout.PageLayout()
+    pl.pageWidth = 842    # A3 width in points
+    pl.pageHeight = 1191  # A3 height in points
+    pl.leftMargin = 50     # Reduced left margin (points)
+    pl.rightMargin = 50    # Reduced right margin (points)
+    pl.topMargin = 50      # Reduced top margin (points)
+    pl.bottomMargin = 50   # Reduced bottom margin (points)
+    complete_score.insert(0, pl)
+
+    # Add each key's scales and arpeggios as separate Parts
     for key_sig in multiple_keys:
         key_score = create_part_for_single_key_scales_arpeggios(
             key_signature=key_sig,
             num_octaves=num_octaves,
             instrument_name=instrument_name
         )
-        # Convert the Score to a Part to add it to the complete score
-        key_part = stream.Part()
-        for measure in key_score.recurse().getElementsByClass('Measure'):
-            key_part.append(measure)
-        complete_score.append(key_part)
+        for part in key_score.parts:
+            complete_score.append(part)
 
-    # Add custom line as a separate Score
-    custom_line_score = create_custom_line_part(
+    # Add custom line as a separate Part
+    custom_part = create_custom_line_part(
         title_text=custom_line_title,
         custom_notes=custom_line,
         instrument_name=instrument_name,
         key_signature="C",
         note_duration='quarter'
     )
-    
-    # Add the custom line score as another independent part
-    custom_part = stream.Part()
-    for measure in custom_line_score.recurse().getElementsByClass('Measure'):
-        custom_part.append(measure)
     complete_score.append(custom_part)
+
+    # Ensure that all parts start on their own system to prevent overlapping
+    for part in complete_score.parts:
+        part.insert(0, layout.SystemLayout(isNew=True))
 
     # Write the complete score to a single PDF
     output_pdf = os.path.join(output_folder, "Complete_Score.pdf")
