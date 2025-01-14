@@ -41,7 +41,7 @@ def determine_clef_and_octave(instrument_name, part='right'):
         "Harp":         ("TrebleClef", 3),
 
         # Woodwinds
-        "Alto Saxophone":   ("TrebleClef", 3),
+        "Alto Saxophone":   ("TrebleClef", 4),
         "Bass Clarinet":    ("TrebleClef", 2),
         "Bassoon":          ("BassClef",   2),
         "Clarinet":         ("TrebleClef", 3),
